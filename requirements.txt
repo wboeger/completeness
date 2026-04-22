@@ -1,0 +1,7 @@
+Flask==2.3.3
+pandas==2.2.2
+openpyxl==3.1.2
+rpy2==3.5.14 # For running R scripts from Python
+gunicorn==22.0.0
+Flask-SQLAlchemy==3.1.1
+Werkzeug==3.1.8 # Explicitly add Werkzeug for security utilities

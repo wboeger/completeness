@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taxon Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h2>Welcome, {{ username }}!</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <p>Total allowed taxa loaded: {{ allowed_taxa_count }}</p>
+
+        <h3>Run Taxon Analysis</h3>
+        <form method="POST" action="{{ url_for('analyze_taxon') }}">
+            <label for="taxon">Enter Taxon Name:</label>
+            <input type="text" id="taxon" name="taxon" required>
+            <button type="submit">Analyze</button>
+        </form>
+
+        {% if is_admin %}
+            <p><a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a></p>
+        {% endif %}
+        <p><a href="{{ url_for('logout') }}">Logout</a></p>
+    </div>
+</body>
+</html>
