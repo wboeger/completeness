@@ -71,6 +71,9 @@ def load_data_on_startup():
         PLANILHA_DF = pd.read_excel(BytesIO(planilha_content))
         print(f"Loaded {len(PLANILHA_DF)} records from main data sheet.")
         
+        # Normalize column names to prevent KeyErrors
+        PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
+        
         taxonomic_ranks = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'scientificname']
         df_taxons = PLANILHA_DF.dropna(subset=taxonomic_ranks[:-1]).copy()
 
