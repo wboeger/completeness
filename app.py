@@ -11,6 +11,10 @@ import datetime
 import requests
 from io import BytesIO
 import numpy as np
+import matplotlib
+matplotlib.use('Agg') # Use the Agg backend for non-interactive plotting
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -93,6 +97,60 @@ def load_data_on_startup():
     else:
         print("Data loading failed.")
 
+def generate_completeness_histograms(dataframe, category_column, value_column, title_prefix, output_path):
+    """
+    Generates histograms for completeness values (mean, min, max, amplitude) for each item in a category
+    and saves them to a single PDF file.
+    """
+    if dataframe.empty:
+        print(f"No data to generate histograms for {title_prefix}.")
+        return
+
+    with PdfPages(output_path) as pdf:
+        # Plotting mean completeness
+        fig, ax = plt.subplots(figsize=(10, 6))
+        dataframe.set_index(category_column)['mean_complete'].plot(kind='bar', ax=ax, color='skyblue')
+        ax.set_title(f'{title_prefix} - Média de Completude')
+        ax.set_ylabel('Média de Completude (%)')
+        ax.set_xlabel(category_column.capitalize())
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # Plotting amplitude
+        fig, ax = plt.subplots(figsize=(10, 6))
+        dataframe.set_index(category_column)['amplitude'].plot(kind='bar', ax=ax, color='lightcoral')
+        ax.set_title(f'{title_prefix} - Amplitude de Completude')
+        ax.set_ylabel('Amplitude (%)')
+        ax.set_xlabel(category_column.capitalize())
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # Plotting min completeness
+        fig, ax = plt.subplots(figsize=(10, 6))
+        dataframe.set_index(category_column)['min_complete'].plot(kind='bar', ax=ax, color='lightgreen')
+        ax.set_title(f'{title_prefix} - Completude Mínima')
+        ax.set_ylabel('Completude Mínima (%)')
+        ax.set_xlabel(category_column.capitalize())
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+
+        # Plotting max completeness
+        fig, ax = plt.subplots(figsize=(10, 6))
+        dataframe.set_index(category_column)['max_complete'].plot(kind='bar', ax=ax, color='gold')
+        ax.set_title(f'{title_prefix} - Completude Máxima')
+        ax.set_ylabel('Completude Máxima (%)')
+        ax.set_xlabel(category_column.capitalize())
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        pdf.savefig(fig)
+        plt.close(fig)
+
 # --- Python-based Analysis Function (omitted for brevity, no changes needed) ---
 def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
     try:
@@ -146,18 +204,67 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         by_class['pesquisador'] = by_class.apply(find_researcher, ranks=['class', 'phylum'], axis=1)
         by_subclass['pesquisador'] = by_subclass.apply(find_researcher, ranks=['subclass', 'class', 'phylum'], axis=1)
         by_phylum['pesquisador'] = by_phylum['phylum'].map(pesq_map)
+        
         temp_dir = os.path.join(app.root_path, 'temp_analysis_output', taxon_filter.replace(" ", "_") + "_" + str(os.getpid()))
         os.makedirs(temp_dir, exist_ok=True)
-        by_family.to_csv(os.path.join(temp_dir, "completeness_by_family.csv"), index=False)
-        by_order.to_csv(os.path.join(temp_dir, "completeness_by_order.csv"), index=False)
-        by_class.to_csv(os.path.join(temp_dir, "completeness_by_class.csv"), index=False)
-        by_subclass.to_csv(os.path.join(temp_dir, "completeness_by_subclass.csv"), index=False)
-        by_phylum.to_csv(os.path.join(temp_dir, "completeness_by_phylum.csv"), index=False)
-        species_data.to_csv(os.path.join(temp_dir, "completeness_per_species.csv"), index=False)
+
+        # List to store paths of all generated files (XLSX and PDF)
+        generated_files = []
+
+        # Save dataframes to XLSX
+        by_family_path = os.path.join(temp_dir, "completeness_by_family.xlsx")
+        by_family.to_excel(by_family_path, index=False)
+        generated_files.append(by_family_path)
+
+        by_order_path = os.path.join(temp_dir, "completeness_by_order.xlsx")
+        by_order.to_excel(by_order_path, index=False)
+        generated_files.append(by_order_path)
+
+        by_class_path = os.path.join(temp_dir, "completeness_by_class.xlsx")
+        by_class.to_excel(by_class_path, index=False)
+        generated_files.append(by_class_path)
+
+        by_subclass_path = os.path.join(temp_dir, "completeness_by_subclass.xlsx")
+        by_subclass.to_excel(by_subclass_path, index=False)
+        generated_files.append(by_subclass_path)
+
+        by_phylum_path = os.path.join(temp_dir, "completeness_by_phylum.xlsx")
+        by_phylum.to_excel(by_phylum_path, index=False)
+        generated_files.append(by_phylum_path)
+
+        species_data_path = os.path.join(temp_dir, "completeness_per_species.xlsx")
+        species_data.to_excel(species_data_path, index=False)
+        generated_files.append(species_data_path)
+
+        # Generate and save histograms as PDFs
+        pdf_family_path = os.path.join(temp_dir, "completeness_histograms_family.pdf")
+        generate_completeness_histograms(by_family, 'family', 'amplitude', 'Completude por Família', pdf_family_path)
+        generated_files.append(pdf_family_path)
+
+        pdf_order_path = os.path.join(temp_dir, "completeness_histograms_order.pdf")
+        generate_completeness_histograms(by_order, 'order', 'amplitude', 'Completude por Ordem', pdf_order_path)
+        generated_files.append(pdf_order_path)
+
+        pdf_class_path = os.path.join(temp_dir, "completeness_histograms_class.pdf")
+        generate_completeness_histograms(by_class, 'class', 'amplitude', 'Completude por Classe', pdf_class_path)
+        generated_files.append(pdf_class_path)
+
+        pdf_subclass_path = os.path.join(temp_dir, "completeness_histograms_subclass.pdf")
+        generate_completeness_histograms(by_subclass, 'subclass', 'amplitude', 'Completude por Subclasse', pdf_subclass_path)
+        generated_files.append(pdf_subclass_path)
+
+        pdf_phylum_path = os.path.join(temp_dir, "completeness_histograms_phylum.pdf")
+        generate_completeness_histograms(by_phylum, 'phylum', 'amplitude', 'Completude por Filo', pdf_phylum_path)
+        generated_files.append(pdf_phylum_path)
+
         zip_filename = f"{taxon_filter.replace(' ', '_')}_analysis_results.zip"
         zip_filepath = os.path.join(app.root_path, 'temp_zips', zip_filename)
         os.makedirs(os.path.dirname(zip_filepath), exist_ok=True)
-        shutil.make_archive(zip_filepath.replace('.zip', ''), 'zip', temp_dir)
+        
+        with zipfile.ZipFile(zip_filepath, 'w') as zf:
+            for file_path in generated_files:
+                zf.write(file_path, os.path.basename(file_path))
+
         shutil.rmtree(temp_dir)
         return zip_filepath
     except Exception as e:
@@ -233,7 +340,7 @@ def analyze_taxon():
         return redirect(url_for('index'))
 
     if not user.is_admin and not is_taxon_authorized(taxon_input, session.get('allowed_taxa', [])):
-        flash(f"Taxon '{taxon_input}' is not allowed for analysis.", 'danger')
+        flash(f"Taxon '{taxon_input}' is not allowed for analysis.', 'danger')
         return redirect(url_for('index'))
 
     result_zip_path = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
