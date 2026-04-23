@@ -270,6 +270,13 @@ def is_taxon_authorized(requested_taxon, user_allowed_taxa):
 @app.route('/analyze', methods=['POST'])
 def analyze_taxon():
     if 'user_id' not in session: return redirect(url_for('login'))
+
+    # --- Check if data was loaded on startup ---
+    if PLANILHA_DF is None or PESQUISADORES_DF is None:
+        flash("Error: Application data could not be loaded on startup. Please try restarting the application service.", 'danger')
+        return redirect(url_for('index'))
+    # --- End Check ---
+
     user = User.query.get(session['user_id'])
     taxon_input = request.form['taxon'].strip()
     if not taxon_input:
