@@ -8,7 +8,18 @@
 </head>
 <body>
     <div class="container">
-        <h2>Welcome, {{ username }}!</h2>
+        <div class="header">
+            <h2>Welcome, {{ username }}!</h2>
+            <div class="status-indicator">
+                <span>Data Status:</span>
+                {% if data_loaded %}
+                    <span class="status-light status-ok" title="Data files loaded successfully."></span>
+                {% else %}
+                    <span class="status-light status-error" title="Error loading data files on startup."></span>
+                {% endif %}
+            </div>
+        </div>
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <ul class="flashes">
@@ -19,8 +30,6 @@
             {% endif %}
         {% endwith %}
 
-        <p>Total allowed taxa loaded: {{ allowed_taxa_count }}</p>
-
         <h3>Run Taxon Analysis</h3>
         <form method="POST" action="{{ url_for('analyze_taxon') }}">
             <label for="taxon">Enter Taxon Name:</label>
@@ -28,10 +37,24 @@
             <button type="submit">Analyze</button>
         </form>
 
-        {% if is_admin %}
-            <p><a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a></p>
+        {% if allowed_taxa_list %}
+        <div class="taxa-info">
+            <h4>Your Authorized Taxa:</h4>
+            <p>You can analyze these taxa or any subordinate group.</p>
+            <ul>
+                {% for taxon in allowed_taxa_list %}
+                    <li>{{ taxon|title }}</li>
+                {% endfor %}
+            </ul>
+        </div>
         {% endif %}
-        <p><a href="{{ url_for('logout') }}">Logout</a></p>
+
+        <div class="footer-links">
+            {% if is_admin %}
+                <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}">Logout</a>
+        </div>
     </div>
 </body>
 </html>
