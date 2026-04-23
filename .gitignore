@@ -28,5 +28,8 @@ instance/
 temp_analysis_output/
 temp_zips/
 
+# Project Data
+/data/
+
 # macOS
 .DS_Store

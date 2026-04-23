@@ -1,3 +1,6 @@
 # nixpacks.toml
 [phases.setup]
 aptPkgs = ["r-base", "r-base-dev"]
+
+[start]
+cmd = "gunicorn app:app"
