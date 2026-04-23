@@ -74,8 +74,11 @@ def load_data_on_startup():
         # Normalize column names to prevent KeyErrors
         PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
         
-        taxonomic_ranks = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'scientificname']
-        df_taxons = PLANILHA_DF.dropna(subset=taxonomic_ranks[:-1]).copy()
+        taxonomic_ranks = ['phylum', 'class', 'order', 'family', 'genus', 'scientificname']
+        
+        # Filter out rows that don't have the required taxonomic ranks
+        valid_ranks = [rank for rank in taxonomic_ranks if rank in PLANILHA_DF.columns]
+        df_taxons = PLANILHA_DF.dropna(subset=valid_ranks[:-1]).copy()
 
         for rank_index in range(len(taxonomic_ranks) - 1):
             parent_rank = taxonomic_ranks[rank_index]
