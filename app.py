@@ -515,31 +515,51 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 
         filled_matrix = species_data[manual_present].apply(is_filled)
 
-        # --- Ecological exclusion vectors (regras.txt Section 5) ---
+        # --- Ecological exclusion vectors ---
+        is_epicontinental = pd.Series(False, index=species_data.index)
         if 'environment' in species_data.columns:
-            remove_marine = species_data['environment'].str.lower().str.strip() == "epicontinental"
-        else:
-            remove_marine = pd.Series(False, index=species_data.index)
+            is_epicontinental = species_data['environment'].str.lower().str.strip() == "epicontinental"
 
+        lifeform_lower = pd.Series('', index=species_data.index)
         if 'lifeform' in species_data.columns:
-            remove_animal = species_data['lifeform'].str.lower().str.strip() == "herbivoro"
-        else:
-            remove_animal = pd.Series(False, index=species_data.index)
+            lifeform_lower = species_data['lifeform'].fillna('').str.lower().str.strip()
 
-        # --- Adjust BOTH numerator and denominator (critical fix) ---
-        # R: filled_count -= as.integer(remove_marine & filled_matrix[, marine_idx])
-        filled_count = filled_matrix.sum(axis=1)
-        if 'marinedomain' in manual_present:
-            filled_count = filled_count - (remove_marine & filled_matrix['marinedomain']).astype(int)
-        if 'animalhostnames' in manual_present:
-            filled_count = filled_count - (remove_animal & filled_matrix['animalhostnames']).astype(int)
+        # Parasites/epibiontes get 1 combined host slot; all others get 0 host slots
+        PARASITE_FORMS = {"endoparasito", "ectoparasito", "epibionte"}
+        is_parasite = lifeform_lower.isin(PARASITE_FORMS)
+
+        # --- Adjust numerator and denominator ---
+        filled_count = filled_matrix.sum(axis=1).copy().astype(float)
+        species_data['total_applicable'] = float(len(manual_present))
+
+        # Rule 1: environment = "epicontinental" → exclude marinedomain and epicontinentaldomain
+        for col in ('marinedomain', 'epicontinentaldomain'):
+            if col in manual_present:
+                filled_count -= (is_epicontinental & filled_matrix[col]).astype(float)
+                species_data.loc[is_epicontinental, 'total_applicable'] -= 1.0
+
+        # Rule 2: host columns — parasites/epibiontes get 1 combined slot (OR); everyone else gets 0
+        animal_in = 'animalhostnames' in manual_present
+        vegetal_in = 'vegetalhostnames' in manual_present
+        if animal_in or vegetal_in:
+            # Remove raw contributions of both host columns from filled_count for all rows
+            if animal_in:
+                filled_count -= filled_matrix['animalhostnames'].astype(float)
+            if vegetal_in:
+                filled_count -= filled_matrix['vegetalhostnames'].astype(float)
+            # Remove both host slots from denominator for all rows
+            species_data['total_applicable'] -= float(int(animal_in) + int(vegetal_in))
+            # Parasites/epibiontes: add back 1 slot + 1 if either host field is filled
+            if animal_in and vegetal_in:
+                host_filled = (filled_matrix['animalhostnames'] | filled_matrix['vegetalhostnames']).astype(float)
+            elif animal_in:
+                host_filled = filled_matrix['animalhostnames'].astype(float)
+            else:
+                host_filled = filled_matrix['vegetalhostnames'].astype(float)
+            species_data.loc[is_parasite, 'total_applicable'] += 1.0
+            filled_count += (is_parasite.astype(float) * host_filled)
 
         species_data['filled_count'] = filled_count.values
-        species_data['total_applicable'] = len(manual_present)
-        if 'marinedomain' in manual_present:
-            species_data.loc[remove_marine, 'total_applicable'] -= 1
-        if 'animalhostnames' in manual_present:
-            species_data.loc[remove_animal, 'total_applicable'] -= 1
         species_data['completeness'] = (species_data['filled_count'] / species_data['total_applicable']) * 100
 
         # --- Aggregation helpers ---
