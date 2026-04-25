@@ -437,7 +437,29 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
-        species_data = filtered_data[rank_mask & status_mask].copy()
+        accepted = filtered_data[rank_mask & status_mask].copy()
+        if accepted.empty:
+            return None
+
+        # If a species has accepted subspecies, drop the species-level row and
+        # use only its subspecies as the units of analysis.
+        if 'genus' in accepted.columns and 'specificepithet' in accepted.columns:
+            accepted['_binomial'] = (
+                accepted['genus'].fillna('').str.strip() + ' ' +
+                accepted['specificepithet'].fillna('').str.strip()
+            ).str.lower()
+            subsp_binomials = set(
+                accepted.loc[accepted['taxonrank'] == 'SUBESPECIE', '_binomial']
+            )
+            # Keep row if it is a subspecies OR if its binomial has no subspecies
+            species_data = accepted[
+                (accepted['taxonrank'] == 'SUBESPECIE') |
+                (~accepted['_binomial'].isin(subsp_binomials))
+            ].copy()
+            species_data.drop(columns=['_binomial'], inplace=True)
+        else:
+            species_data = accepted.copy()
+
         if species_data.empty:
             return None
 
