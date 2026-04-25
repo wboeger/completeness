@@ -585,6 +585,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 
         # Context (parent) columns per level — mirrors R script exactly
         HIERARCHY_CONTEXT = {
+            'genus':    ['phylum', 'class', 'order', 'family'],
             'family':   ['phylum', 'class', 'order'],
             'order':    ['phylum', 'class'],
             'class':    ['phylum'],
@@ -617,6 +618,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         by_class    = aggregate_by('class')    if is_below_input_rank('class')    else pd.DataFrame()
         by_subclass = aggregate_by('subclass') if is_below_input_rank('subclass') else pd.DataFrame()
         by_phylum   = aggregate_by('phylum')   if is_below_input_rank('phylum')   else pd.DataFrame()
+        # When the input taxon is a family, also aggregate by genus
+        by_genus    = aggregate_by('genus')    if taxon_rank_col == 'family'       else pd.DataFrame()
 
         # --- Researcher lookup ---
         # pesq_map: Táxons value → nome_completo (full name, not login username)
@@ -641,6 +644,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             return np.nan
 
         # Full cascade up the hierarchy — closest responsible researcher wins
+        if not by_genus.empty:
+            by_genus['pesquisador']    = by_genus.apply(find_researcher,    search_ranks=['genus', 'family', 'order', 'class', 'phylum'], axis=1)
         if not by_family.empty:
             by_family['pesquisador']   = by_family.apply(find_researcher,   search_ranks=['family', 'order', 'class', 'phylum'], axis=1)
         if not by_order.empty:
@@ -666,11 +671,12 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 
         # Column ordering aligned with R script output
         COL_ORDER = {
-            'family':   ['taxon_analisado', 'phylum', 'class', 'order', 'family',   'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'order':    ['taxon_analisado', 'phylum', 'class', 'order',             'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'class':    ['taxon_analisado', 'phylum', 'class',                      'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'subclass': ['taxon_analisado', 'phylum', 'class', 'subclass',          'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'phylum':   ['taxon_analisado', 'phylum',                               'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'genus':    ['taxon_analisado', 'phylum', 'class', 'order', 'family', 'genus', 'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'family':   ['taxon_analisado', 'phylum', 'class', 'order', 'family',          'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'order':    ['taxon_analisado', 'phylum', 'class', 'order',                    'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'class':    ['taxon_analisado', 'phylum', 'class',                             'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'subclass': ['taxon_analisado', 'phylum', 'class', 'subclass',                 'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'phylum':   ['taxon_analisado', 'phylum',                                      'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
         }
 
         def reorder(df, level, sort_cols):
@@ -678,6 +684,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             cols = [c for c in COL_ORDER[level] if c in df.columns]
             return df[cols]
 
+        by_genus_out    = reorder(by_genus,    'genus',    ['family', 'genus'])                    if not by_genus.empty    else pd.DataFrame()
         by_family_out   = reorder(by_family,   'family',   ['phylum', 'class', 'order', 'family']) if not by_family.empty   else pd.DataFrame()
         by_order_out    = reorder(by_order,    'order',    ['phylum', 'class', 'order'])           if not by_order.empty    else pd.DataFrame()
         by_class_out    = reorder(by_class,    'class',    ['phylum', 'class'])                    if not by_class.empty    else pd.DataFrame()
@@ -706,6 +713,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         generated_files = []
 
         for fname, df in [
+            ("completeness_by_genus.xlsx",    by_genus_out),
             ("completeness_by_family.xlsx",   by_family_out),
             ("completeness_by_order.xlsx",    by_order_out),
             ("completeness_by_class.xlsx",    by_class_out),
@@ -720,6 +728,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             generated_files.append(path)
 
         for fname, df, col, label, sort_cols in [
+            ("completeness_histograms_genus.pdf",    by_genus,    'genus',    'Gênero',    ['family', 'genus']),
             ("completeness_histograms_family.pdf",   by_family,   'family',   'Família',   ['phylum', 'class', 'order', 'family']),
             ("completeness_histograms_order.pdf",    by_order,    'order',    'Ordem',     ['phylum', 'class', 'order']),
             ("completeness_histograms_class.pdf",    by_class,    'class',    'Classe',    ['phylum', 'class']),
