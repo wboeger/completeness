@@ -262,11 +262,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                     return name if i == 0 else f"{name} (via {rank})"
             return np.nan
 
-        # Lookup: same level first, then immediately superior, then cascade up
-        by_family['pesquisador']   = by_family.apply(find_researcher,   parent_ranks=['family', 'order', 'class', 'phylum'], axis=1)
-        by_order['pesquisador']    = by_order.apply(find_researcher,    parent_ranks=['order', 'class', 'phylum'], axis=1)
-        by_class['pesquisador']    = by_class.apply(find_researcher,    parent_ranks=['class', 'phylum'], axis=1)
-        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, parent_ranks=['subclass', 'class', 'phylum'], axis=1)
+        # Lookup: same level, then ONE level immediately above — no further cascade
+        by_family['pesquisador']   = by_family.apply(find_researcher,   parent_ranks=['family',   'order'],   axis=1)
+        by_order['pesquisador']    = by_order.apply(find_researcher,    parent_ranks=['order',    'class'],   axis=1)
+        by_class['pesquisador']    = by_class.apply(find_researcher,    parent_ranks=['class',    'phylum'],  axis=1)
+        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, parent_ranks=['subclass', 'class'],   axis=1)
         by_phylum['pesquisador']   = by_phylum['phylum'].map(pesq_map)
 
         # --- top_first: put max mean_complete row first, mark with <<< MAX ---
@@ -305,9 +305,9 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         species_cols = ['taxonid', 'scientificname', 'phylum', 'class', 'subclass', 'order',
                         'family', 'taxonrank', 'completeness', 'filled_count', 'total_applicable']
         species_export = species_data[[c for c in species_cols if c in species_data.columns]].copy()
-        # Species: same level (family) first, then immediately superior (order), then cascade
+        # Species: family (same level as the group responsible for the species), then order
         species_export['pesquisador'] = species_export.apply(
-            find_researcher, parent_ranks=['family', 'order', 'subclass', 'class', 'phylum'], axis=1
+            find_researcher, parent_ranks=['family', 'order'], axis=1
         )
         sort_sp = [c for c in ['phylum', 'class', 'subclass', 'order', 'family', 'scientificname']
                    if c in species_export.columns]
