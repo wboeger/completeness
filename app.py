@@ -521,14 +521,15 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             env_lower = species_data['environment'].fillna('').str.lower().str.strip()
 
         is_epicontinental = env_lower == "epicontinental"
+        is_marine         = env_lower == "marinho"
 
         lifeform_lower = pd.Series('', index=species_data.index)
         if 'lifeform' in species_data.columns:
             lifeform_lower = species_data['lifeform'].fillna('').str.lower().str.strip()
 
-        # Parasites/epibiontes get 1 combined host slot; all others get 0 host slots
         PARASITE_FORMS = {"endoparasito", "ectoparasito", "epibionte"}
-        is_parasite = lifeform_lower.isin(PARASITE_FORMS)
+        is_parasite  = lifeform_lower.isin(PARASITE_FORMS)
+        is_herbivore = lifeform_lower == "herbivoro"
 
         # --- Adjust numerator and denominator ---
         filled_count = filled_matrix.sum(axis=1).copy().astype(float)
@@ -539,18 +540,26 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             filled_count -= (is_epicontinental & filled_matrix['marinedomain']).astype(float)
             species_data.loc[is_epicontinental, 'total_applicable'] -= 1.0
 
-        # Rule 2: host columns — parasites/epibiontes get 1 combined slot (OR); everyone else gets 0
+        # environment = "marinho" → exclude epicontinentaldomain
+        if 'epicontinentaldomain' in manual_present:
+            filled_count -= (is_marine & filled_matrix['epicontinentaldomain']).astype(float)
+            species_data.loc[is_marine, 'total_applicable'] -= 1.0
+
+        # Host column rules (applied after stripping both columns from everyone):
+        #   parasites/epibiontes → 1 combined slot (OR of both host columns)
+        #   herbivores           → vegetalhostnames counts; animalhostnames excluded
+        #   all others           → both host columns excluded
         animal_in = 'animalhostnames' in manual_present
         vegetal_in = 'vegetalhostnames' in manual_present
         if animal_in or vegetal_in:
-            # Remove raw contributions of both host columns from filled_count for all rows
+            # Strip both columns from everyone
             if animal_in:
                 filled_count -= filled_matrix['animalhostnames'].astype(float)
             if vegetal_in:
                 filled_count -= filled_matrix['vegetalhostnames'].astype(float)
-            # Remove both host slots from denominator for all rows
             species_data['total_applicable'] -= float(int(animal_in) + int(vegetal_in))
-            # Parasites/epibiontes: add back 1 slot + 1 if either host field is filled
+
+            # Parasites/epibiontes: 1 combined slot
             if animal_in and vegetal_in:
                 host_filled = (filled_matrix['animalhostnames'] | filled_matrix['vegetalhostnames']).astype(float)
             elif animal_in:
@@ -558,7 +567,12 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             else:
                 host_filled = filled_matrix['vegetalhostnames'].astype(float)
             species_data.loc[is_parasite, 'total_applicable'] += 1.0
-            filled_count += (is_parasite.astype(float) * host_filled)
+            filled_count += is_parasite.astype(float) * host_filled
+
+            # Herbivores: add back vegetalhostnames slot only
+            if vegetal_in:
+                species_data.loc[is_herbivore, 'total_applicable'] += 1.0
+                filled_count += is_herbivore.astype(float) * filled_matrix['vegetalhostnames'].astype(float)
 
         species_data['filled_count'] = filled_count.values
         species_data['completeness'] = (species_data['filled_count'] / species_data['total_applicable']) * 100
