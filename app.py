@@ -2,6 +2,9 @@ from flask import Flask, render_template, request, redirect, url_for, session, s
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import time
+import threading
+import uuid
 import pandas as pd
 import subprocess
 import json
@@ -177,6 +180,178 @@ def _load_session_taxa(user):
                 )
                 return
     session['allowed_taxa'] = []
+
+# ── GBIF gap analysis ──────────────────────────────────────────────────────────
+GBIF_JOBS = {}   # job_id → dict with status/progress/result
+
+def _gbif_gap_worker(job_id, taxon_name, planilha_df):
+    def update(progress, pct=None):
+        GBIF_JOBS[job_id]['progress'] = progress
+        if pct is not None:
+            GBIF_JOBS[job_id]['pct'] = pct
+
+    try:
+        GBIF_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                              'result_path': None, 'error': None}
+
+        # ── Phase 1: resolve taxon name → GBIF usageKey ──
+        update('Buscando táxon no GBIF…', 2)
+        r = requests.get('https://api.gbif.org/v1/species/match',
+                         params={'name': taxon_name, 'verbose': 'false'}, timeout=30)
+        r.raise_for_status()
+        match = r.json()
+        taxon_key = match.get('usageKey')
+        if not taxon_key:
+            GBIF_JOBS[job_id].update(status='error',
+                error=f'Táxon "{taxon_name}" não encontrado no GBIF (sem usageKey).')
+            return
+        gbif_rank = match.get('rank', '')
+        update(f'Táxon encontrado: {match.get("canonicalName", taxon_name)} ({gbif_rank}, key={taxon_key})', 5)
+
+        # ── Phase 2: collect speciesKey values via occurrence facets ──
+        update('Coletando chaves de espécies via GBIF Occurrence Search (Brasil)…', 8)
+        FACET_LIMIT = 50000
+        species_keys = []
+        offset = 0
+        while True:
+            r = requests.get(
+                'https://api.gbif.org/v1/occurrence/search',
+                params={'country': 'BR', 'taxonKey': taxon_key,
+                        'facet': 'speciesKey', 'facetLimit': FACET_LIMIT,
+                        'facetOffset': offset, 'limit': 0},
+                timeout=60
+            )
+            r.raise_for_status()
+            data = r.json()
+            facets = data.get('facets', [])
+            if not facets or not facets[0].get('counts'):
+                break
+            counts = facets[0]['counts']
+            species_keys.extend(int(c['name']) for c in counts)
+            if len(counts) < FACET_LIMIT:
+                break
+            offset += FACET_LIMIT
+            time.sleep(0.3)
+
+        n_keys = len(species_keys)
+        update(f'{n_keys} chaves de espécies encontradas no GBIF. Resolvendo nomes…', 15)
+
+        # ── Phase 3: resolve each speciesKey → canonical name (parallelised) ──
+        resolved = [None] * n_keys
+        lock = threading.Lock()
+        counter = [0]
+
+        def resolve_one(idx, key):
+            try:
+                rr = requests.get(f'https://api.gbif.org/v1/species/{key}', timeout=30)
+                if rr.ok:
+                    sp = rr.json()
+                    name = sp.get('canonicalName', '')
+                    if name and len(name.split()) >= 2:
+                        resolved[idx] = {
+                            'species_key':  key,
+                            'canonical_name': name,
+                            'gbif_family':  sp.get('family', ''),
+                            'gbif_order':   sp.get('order', ''),
+                            'gbif_class':   sp.get('class', ''),
+                            'gbif_phylum':  sp.get('phylum', ''),
+                        }
+            except Exception:
+                pass
+            with lock:
+                counter[0] += 1
+                done = counter[0]
+            if done % 200 == 0 or done == n_keys:
+                pct = 15 + int(done / max(n_keys, 1) * 70)
+                update(f'Resolvendo nomes: {done}/{n_keys}…', pct)
+
+        # Use up to 20 parallel threads (GBIF allows ~20 req/s)
+        MAX_WORKERS = 20
+        threads = []
+        for idx, key in enumerate(species_keys):
+            t = threading.Thread(target=resolve_one, args=(idx, key), daemon=True)
+            threads.append(t)
+            t.start()
+            if len(threads) >= MAX_WORKERS:
+                threads[0].join()
+                threads.pop(0)
+        for t in threads:
+            t.join()
+
+        gbif_df = pd.DataFrame([r for r in resolved if r is not None])
+        if gbif_df.empty:
+            GBIF_JOBS[job_id].update(status='error',
+                error='Nenhuma espécie válida retornada pelo GBIF.')
+            return
+
+        # ── Phase 4: compare with CTFB ──
+        update('Comparando com CTFB…', 88)
+        df = planilha_df.copy()
+        has_status = 'taxonomicstatus' in df.columns
+        ctfb_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        if has_status:
+            ctfb_mask &= df['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'
+        ctfb_mask &= df.get('genus', pd.Series(dtype=str)).notna()
+        ctfb_mask &= df.get('specificepithet', pd.Series(dtype=str)).notna()
+        ctfb_sp = df[ctfb_mask]
+        ctfb_binomials = set(
+            (ctfb_sp['genus'].str.strip() + ' ' + ctfb_sp['specificepithet'].str.strip())
+            .str.lower()
+        )
+
+        gbif_df['gbif_binomial'] = gbif_df['canonical_name'].str.lower().str.strip()
+        not_in_ctfb = gbif_df[~gbif_df['gbif_binomial'].isin(ctfb_binomials)].copy()
+        not_in_ctfb = not_in_ctfb.sort_values(
+            ['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family', 'canonical_name'])
+        in_ctfb = gbif_df[gbif_df['gbif_binomial'].isin(ctfb_binomials)].copy()
+
+        # Summary by family
+        summary = (not_in_ctfb.groupby(['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family'])
+                               .agg(ausentes_ctfb=('canonical_name', 'count'))
+                               .reset_index())
+        gbif_fam = (gbif_df.groupby('gbif_family')
+                            .agg(total_gbif=('canonical_name', 'count'))
+                            .reset_index())
+        summary = summary.merge(gbif_fam, on='gbif_family', how='left')
+        summary['pct_ausente'] = (summary['ausentes_ctfb'] / summary['total_gbif'] * 100).round(1)
+        summary = summary.sort_values('ausentes_ctfb', ascending=False)
+
+        # ── Save XLSX ──
+        update('Gerando arquivo XLSX…', 95)
+        result_path = os.path.join('/tmp', f'gbif_gap_{job_id}.xlsx')
+        with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
+            not_in_ctfb[['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family',
+                          'canonical_name', 'species_key']].rename(columns={
+                'gbif_phylum': 'phylum_gbif', 'gbif_class': 'classe_gbif',
+                'gbif_order': 'ordem_gbif',   'gbif_family': 'familia_gbif',
+                'canonical_name': 'nome_cientifico', 'species_key': 'gbif_species_key',
+            }).to_excel(writer, sheet_name='Ausentes_no_CTFB', index=False)
+
+            summary.rename(columns={
+                'gbif_phylum': 'phylum', 'gbif_class': 'classe',
+                'gbif_order': 'ordem',  'gbif_family': 'familia',
+            }).to_excel(writer, sheet_name='Resumo_por_Familia', index=False)
+
+            in_ctfb[['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family',
+                      'canonical_name', 'species_key']].rename(columns={
+                'gbif_phylum': 'phylum_gbif', 'gbif_class': 'classe_gbif',
+                'gbif_order': 'ordem_gbif',   'gbif_family': 'familia_gbif',
+                'canonical_name': 'nome_cientifico', 'species_key': 'gbif_species_key',
+            }).to_excel(writer, sheet_name='Presentes_no_CTFB', index=False)
+
+        GBIF_JOBS[job_id].update(
+            status='done', pct=100,
+            progress=f'Concluído.',
+            result_path=result_path,
+            taxon_name=taxon_name,
+            n_gbif=len(gbif_df),
+            n_missing=len(not_in_ctfb),
+            n_present=len(in_ctfb),
+            n_ctfb=len(ctfb_binomials),
+        )
+
+    except Exception as e:
+        GBIF_JOBS[job_id].update(status='error', error=str(e))
 
 def generate_completeness_chart(dataframe, category_column, title_label, sort_cols, output_path):
     """
@@ -744,6 +919,67 @@ def bulk_add_users():
                            results=results,
                            username=current_user.username,
                            is_admin=True)
+
+@app.route('/gbif_gap', methods=['GET', 'POST'])
+def gbif_gap():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    if request.method == 'POST':
+        taxon_name = request.form.get('taxon', '').strip()
+        if not taxon_name:
+            flash('Informe um táxon.', 'danger')
+            return redirect(url_for('gbif_gap'))
+        # Authorization: same rule as the main analysis
+        allowed = session.get('allowed_taxa', [])
+        if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
+            flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
+            return redirect(url_for('gbif_gap'))
+        if PLANILHA_DF is None:
+            flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
+            return redirect(url_for('gbif_gap'))
+        job_id = uuid.uuid4().hex
+        t = threading.Thread(target=_gbif_gap_worker,
+                             args=(job_id, taxon_name, PLANILHA_DF.copy()),
+                             daemon=True)
+        t.start()
+        return redirect(url_for('gbif_gap_status', job_id=job_id))
+    return render_template('gbif_gap.html',
+                           username=user.username, is_admin=user.is_admin,
+                           allowed_taxa=session.get('allowed_taxa', []),
+                           data_loaded=DATA_LOADED_SUCCESSFULLY)
+
+@app.route('/gbif_gap/status/<job_id>')
+def gbif_gap_status(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    job = GBIF_JOBS.get(job_id)
+    if job is None:
+        flash('Job não encontrado.', 'danger')
+        return redirect(url_for('gbif_gap'))
+    return render_template('gbif_gap_status.html',
+                           job=job, job_id=job_id,
+                           username=user.username, is_admin=user.is_admin)
+
+@app.route('/gbif_gap/download/<job_id>')
+def gbif_gap_download(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    job = GBIF_JOBS.get(job_id)
+    if not job or job['status'] != 'done' or not job.get('result_path'):
+        flash('Resultado não disponível.', 'danger')
+        return redirect(url_for('gbif_gap'))
+    taxon_safe = job['taxon_name'].replace(' ', '_').replace('/', '-')
+    return send_file(job['result_path'], as_attachment=True,
+                     download_name=f'gbif_gap_{taxon_safe}.xlsx')
+
+@app.route('/gbif_gap/poll/<job_id>')
+def gbif_gap_poll(job_id):
+    """JSON endpoint polled by the status page."""
+    from flask import jsonify
+    job = GBIF_JOBS.get(job_id, {'status': 'not_found'})
+    return jsonify({k: v for k, v in job.items() if k != 'result_path'})
 
 if __name__ == '__main__':
     app.run(debug=True)

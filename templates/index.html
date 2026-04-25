@@ -51,6 +51,7 @@
         {% endif %}
 
         <div class="footer-links">
+            <a href="{{ url_for('gbif_gap') }}">Lacunas GBIF</a>
             {% if is_admin %}
                 <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
             {% endif %}
