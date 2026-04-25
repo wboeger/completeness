@@ -246,6 +246,11 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
                 rr = requests.get(f'https://api.gbif.org/v1/species/{key}', timeout=30)
                 if rr.ok:
                     sp = rr.json()
+                    # Skip fossil / extinct taxa
+                    if sp.get('extinct') is True:
+                        with lock:
+                            counter[0] += 1
+                        return
                     name = sp.get('canonicalName', '')
                     if name and len(name.split()) >= 2:
                         resolved[idx] = {
@@ -284,70 +289,106 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
                 error='Nenhuma espécie válida retornada pelo GBIF.')
             return
 
-        # ── Phase 4: compare with CTFB ──
+        # ── Phase 4: compare with CTFB (accepted names + synonyms) ──
         update('Comparando com CTFB…', 88)
         df = planilha_df.copy()
         has_status = 'taxonomicstatus' in df.columns
-        ctfb_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        sp_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        has_binomial = df.get('genus', pd.Series(dtype=str)).notna() & \
+                       df.get('specificepithet', pd.Series(dtype=str)).notna()
+
+        def make_binomials(mask):
+            sub = df[mask & has_binomial]
+            return set(
+                (sub['genus'].str.strip() + ' ' + sub['specificepithet'].str.strip())
+                .str.lower()
+            )
+
+        # Accepted names
         if has_status:
-            ctfb_mask &= df['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'
-        ctfb_mask &= df.get('genus', pd.Series(dtype=str)).notna()
-        ctfb_mask &= df.get('specificepithet', pd.Series(dtype=str)).notna()
-        ctfb_sp = df[ctfb_mask]
-        ctfb_binomials = set(
-            (ctfb_sp['genus'].str.strip() + ' ' + ctfb_sp['specificepithet'].str.strip())
-            .str.lower()
-        )
+            ctfb_accepted = make_binomials(
+                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'))
+        else:
+            ctfb_accepted = make_binomials(sp_mask)
+
+        # Synonyms: any other status (SINONIMO, NOME_DUVIDOSO, etc.)
+        if has_status:
+            ctfb_synonyms = make_binomials(
+                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() != 'NOME_ACEITO')
+            ) - ctfb_accepted
+        else:
+            ctfb_synonyms = set()
 
         gbif_df['gbif_binomial'] = gbif_df['canonical_name'].str.lower().str.strip()
-        not_in_ctfb = gbif_df[~gbif_df['gbif_binomial'].isin(ctfb_binomials)].copy()
-        not_in_ctfb = not_in_ctfb.sort_values(
-            ['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family', 'canonical_name'])
-        in_ctfb = gbif_df[gbif_df['gbif_binomial'].isin(ctfb_binomials)].copy()
 
-        # Summary by family
-        summary = (not_in_ctfb.groupby(['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family'])
-                               .agg(ausentes_ctfb=('canonical_name', 'count'))
-                               .reset_index())
+        in_ctfb     = gbif_df[gbif_df['gbif_binomial'].isin(ctfb_accepted)].copy()
+        as_synonym  = gbif_df[
+            ~gbif_df['gbif_binomial'].isin(ctfb_accepted) &
+             gbif_df['gbif_binomial'].isin(ctfb_synonyms)
+        ].copy()
+        not_in_ctfb = gbif_df[
+            ~gbif_df['gbif_binomial'].isin(ctfb_accepted) &
+            ~gbif_df['gbif_binomial'].isin(ctfb_synonyms)
+        ].copy()
+
+        sort_cols = ['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family', 'canonical_name']
+        not_in_ctfb = not_in_ctfb.sort_values(sort_cols)
+        as_synonym  = as_synonym.sort_values(sort_cols)
+
+        # Summary by family (only truly absent species)
+        summary = (not_in_ctfb
+                   .groupby(['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family'])
+                   .agg(ausentes_ctfb=('canonical_name', 'count'))
+                   .reset_index())
         gbif_fam = (gbif_df.groupby('gbif_family')
                             .agg(total_gbif=('canonical_name', 'count'))
                             .reset_index())
-        summary = summary.merge(gbif_fam, on='gbif_family', how='left')
+        syn_fam  = (as_synonym.groupby('gbif_family')
+                               .agg(sinonimos_ctfb=('canonical_name', 'count'))
+                               .reset_index())
+        summary = (summary
+                   .merge(gbif_fam, on='gbif_family', how='left')
+                   .merge(syn_fam,  on='gbif_family', how='left'))
+        summary['sinonimos_ctfb'] = summary['sinonimos_ctfb'].fillna(0).astype(int)
         summary['pct_ausente'] = (summary['ausentes_ctfb'] / summary['total_gbif'] * 100).round(1)
         summary = summary.sort_values('ausentes_ctfb', ascending=False)
+
+        _rename = {
+            'gbif_phylum': 'phylum_gbif', 'gbif_class': 'classe_gbif',
+            'gbif_order': 'ordem_gbif',   'gbif_family': 'familia_gbif',
+            'canonical_name': 'nome_cientifico', 'species_key': 'gbif_species_key',
+        }
+        _export_cols = ['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family',
+                        'canonical_name', 'species_key']
 
         # ── Save XLSX ──
         update('Gerando arquivo XLSX…', 95)
         result_path = os.path.join('/tmp', f'gbif_gap_{job_id}.xlsx')
         with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
-            not_in_ctfb[['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family',
-                          'canonical_name', 'species_key']].rename(columns={
-                'gbif_phylum': 'phylum_gbif', 'gbif_class': 'classe_gbif',
-                'gbif_order': 'ordem_gbif',   'gbif_family': 'familia_gbif',
-                'canonical_name': 'nome_cientifico', 'species_key': 'gbif_species_key',
-            }).to_excel(writer, sheet_name='Ausentes_no_CTFB', index=False)
+            not_in_ctfb[_export_cols].rename(columns=_rename).to_excel(
+                writer, sheet_name='Ausentes_no_CTFB', index=False)
+
+            as_synonym[_export_cols].rename(columns=_rename).to_excel(
+                writer, sheet_name='Sinonimos_no_CTFB', index=False)
 
             summary.rename(columns={
                 'gbif_phylum': 'phylum', 'gbif_class': 'classe',
                 'gbif_order': 'ordem',  'gbif_family': 'familia',
             }).to_excel(writer, sheet_name='Resumo_por_Familia', index=False)
 
-            in_ctfb[['gbif_phylum', 'gbif_class', 'gbif_order', 'gbif_family',
-                      'canonical_name', 'species_key']].rename(columns={
-                'gbif_phylum': 'phylum_gbif', 'gbif_class': 'classe_gbif',
-                'gbif_order': 'ordem_gbif',   'gbif_family': 'familia_gbif',
-                'canonical_name': 'nome_cientifico', 'species_key': 'gbif_species_key',
-            }).to_excel(writer, sheet_name='Presentes_no_CTFB', index=False)
+            in_ctfb[_export_cols].rename(columns=_rename).to_excel(
+                writer, sheet_name='Presentes_no_CTFB', index=False)
 
         GBIF_JOBS[job_id].update(
             status='done', pct=100,
-            progress=f'Concluído.',
+            progress='Concluído.',
             result_path=result_path,
             taxon_name=taxon_name,
             n_gbif=len(gbif_df),
             n_missing=len(not_in_ctfb),
+            n_synonym=len(as_synonym),
             n_present=len(in_ctfb),
-            n_ctfb=len(ctfb_binomials),
+            n_ctfb=len(ctfb_accepted),
         )
 
     except Exception as e:

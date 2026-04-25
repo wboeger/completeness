@@ -44,19 +44,20 @@
         {% if job.status == 'done' %}
         <div class="done-box">
             <h2>Análise concluída!</h2>
-            <div style="margin-bottom:.5rem">
-                <span class="stat"><span class="n">{{ job.n_gbif }}</span><span class="lbl">espécies no GBIF (Brasil)</span></span>
+            <div style="margin-bottom:.8rem; display:flex; flex-wrap:wrap; gap:1.2rem;">
+                <span class="stat"><span class="n">{{ job.n_gbif }}</span><span class="lbl">espécies GBIF (Brasil)<br>excl. fósseis</span></span>
                 <span class="stat"><span class="n" style="color:#c0392b">{{ job.n_missing }}</span><span class="lbl">ausentes no CTFB</span></span>
-                <span class="stat"><span class="n" style="color:#27ae60">{{ job.n_present }}</span><span class="lbl">presentes no CTFB</span></span>
+                <span class="stat"><span class="n" style="color:#e67e22">{{ job.n_synonym }}</span><span class="lbl">presentes como<br>sinônimo no CTFB</span></span>
+                <span class="stat"><span class="n" style="color:#27ae60">{{ job.n_present }}</span><span class="lbl">presentes (nome<br>aceito no CTFB)</span></span>
             </div>
             <div style="font-size:.88rem; color:#555; margin-bottom:.3rem">
-                CTFB contém <strong>{{ job.n_ctfb }}</strong> espécies aceitas neste táxon.
+                CTFB contém <strong>{{ job.n_ctfb }}</strong> espécies aceitas (NOME_ACEITO) neste táxon.
             </div>
             <a class="btn-dl" href="{{ url_for('gbif_gap_download', job_id=job_id) }}">
-                Baixar XLSX (3 abas)
+                Baixar XLSX (4 abas)
             </a>
             <div style="font-size:.78rem; color:#7f8c8d; margin-top:.7rem;">
-                O XLSX contém: <em>Ausentes_no_CTFB</em>, <em>Resumo_por_Familia</em>, <em>Presentes_no_CTFB</em>.
+                O XLSX contém: <em>Ausentes_no_CTFB</em>, <em>Sinonimos_no_CTFB</em>, <em>Resumo_por_Familia</em>, <em>Presentes_no_CTFB</em>.
             </div>
         </div>
 
