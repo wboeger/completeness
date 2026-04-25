@@ -65,7 +65,8 @@ def load_data_on_startup():
     
     pesquisadores_content = download_gsheet(PESQUISADORES_SHEET_URL)
     if pesquisadores_content:
-        PESQUISADORES_DF = pd.read_excel(BytesIO(pesquisadores_content), header=None, names=['username', 'taxons', 'institution'])
+        PESQUISADORES_DF = pd.read_excel(BytesIO(pesquisadores_content), header=0)
+        PESQUISADORES_DF.columns = [c.lower().strip() for c in PESQUISADORES_DF.columns]
         print(f"Loaded {len(PESQUISADORES_DF)} researchers from Google Sheet.")
 
     planilha_content = download_gsheet(PLANILHA_EXTENDIDA_SHEET_URL)
@@ -239,28 +240,33 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         by_subclass = aggregate_by('subclass')
         by_phylum   = aggregate_by('phylum')
 
-        # --- Researcher lookup (split on both ; and ,) ---
-        pesq_lookup = pesquisadores_df.dropna(subset=['taxons']).copy()
-        pesq_lookup['taxons'] = pesq_lookup['taxons'].astype(str).str.split(r'[;,]', regex=True)
-        pesq_lookup = pesq_lookup.explode('taxons')
-        pesq_lookup['taxons'] = pesq_lookup['taxons'].str.strip()
-        pesq_lookup = pesq_lookup[pesq_lookup['taxons'] != '']
-        pesq_map = (pesq_lookup.groupby('taxons')['username']
-                               .apply(lambda x: '; '.join(x.unique()))
+        # --- Researcher lookup ---
+        # pesq_map: Táxons value → nome_completo (full name, not login username)
+        pesq_lookup = pesquisadores_df.dropna(subset=['táxons']).copy()
+        pesq_lookup['táxons'] = pesq_lookup['táxons'].astype(str).str.split(r'[;,]', regex=True)
+        pesq_lookup = pesq_lookup.explode('táxons')
+        pesq_lookup['táxons'] = pesq_lookup['táxons'].str.strip()
+        pesq_lookup = pesq_lookup[pesq_lookup['táxons'] != '']
+        pesq_map = (pesq_lookup.groupby('táxons')['nome_completo']
+                               .apply(lambda x: '; '.join(x.dropna().unique()))
                                .to_dict())
 
-        def find_researcher(row, ranks):
-            for i, rank in enumerate(ranks):
+        def find_researcher(row, parent_ranks):
+            """Return nome_completo of the researcher responsible for the
+            immediately superior taxonomic category (parent_ranks[0]), with
+            cascade fallback to higher ranks if not found."""
+            for i, rank in enumerate(parent_ranks):
                 val = row.get(rank, np.nan)
                 if pd.notna(val) and str(val).strip() and str(val) in pesq_map:
                     name = pesq_map[str(val)]
                     return name if i == 0 else f"{name} (via {rank})"
             return np.nan
 
-        by_family['pesquisador']   = by_family.apply(find_researcher,   ranks=['family', 'order', 'class', 'phylum'], axis=1)
-        by_order['pesquisador']    = by_order.apply(find_researcher,    ranks=['order', 'class', 'phylum'], axis=1)
-        by_class['pesquisador']    = by_class.apply(find_researcher,    ranks=['class', 'phylum'], axis=1)
-        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, ranks=['subclass', 'class', 'phylum'], axis=1)
+        # Lookup: same level first, then immediately superior, then cascade up
+        by_family['pesquisador']   = by_family.apply(find_researcher,   parent_ranks=['family', 'order', 'class', 'phylum'], axis=1)
+        by_order['pesquisador']    = by_order.apply(find_researcher,    parent_ranks=['order', 'class', 'phylum'], axis=1)
+        by_class['pesquisador']    = by_class.apply(find_researcher,    parent_ranks=['class', 'phylum'], axis=1)
+        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, parent_ranks=['subclass', 'class', 'phylum'], axis=1)
         by_phylum['pesquisador']   = by_phylum['phylum'].map(pesq_map)
 
         # --- top_first: put max mean_complete row first, mark with <<< MAX ---
@@ -299,8 +305,9 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         species_cols = ['taxonid', 'scientificname', 'phylum', 'class', 'subclass', 'order',
                         'family', 'taxonrank', 'completeness', 'filled_count', 'total_applicable']
         species_export = species_data[[c for c in species_cols if c in species_data.columns]].copy()
+        # Species: same level (family) first, then immediately superior (order), then cascade
         species_export['pesquisador'] = species_export.apply(
-            find_researcher, ranks=['family', 'order', 'subclass', 'class', 'phylum'], axis=1
+            find_researcher, parent_ranks=['family', 'order', 'subclass', 'class', 'phylum'], axis=1
         )
         sort_sp = [c for c in ['phylum', 'class', 'subclass', 'order', 'family', 'scientificname']
                    if c in species_export.columns]
@@ -379,9 +386,9 @@ def login():
         if user and user.check_password(request.form['password']):
             session['user_id'] = user.id
             if PESQUISADORES_DF is not None:
-                user_data = PESQUISADORES_DF[PESQUISADORES_DF['username'].str.lower() == user.username.lower()]
+                user_data = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == user.username.lower()]
                 if not user_data.empty:
-                    taxa_str = user_data.iloc[0]['taxons']
+                    taxa_str = user_data.iloc[0]['táxons']
                     import re as _re
                     session['allowed_taxa'] = sorted([t.strip().lower() for t in _re.split(r'[;,]', taxa_str)] if isinstance(taxa_str, str) else [])
             flash('Logged in successfully!', 'success')
