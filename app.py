@@ -245,7 +245,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 return True
             return RANK_HIERARCHY.index(level) > taxon_rank_idx
 
-        species_data = filtered_data[filtered_data['taxonrank'].isin(['ESPECIE', 'SUBESPECIE'])].copy()
+        rank_mask   = filtered_data['taxonrank'].isin(['ESPECIE', 'SUBESPECIE'])
+        status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
+                      if 'taxonomicstatus' in filtered_data.columns \
+                      else pd.Series(True, index=filtered_data.index)
+        species_data = filtered_data[rank_mask & status_mask].copy()
         if species_data.empty:
             return None
 
