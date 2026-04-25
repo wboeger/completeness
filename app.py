@@ -97,170 +97,250 @@ def load_data_on_startup():
     else:
         print("Data loading failed.")
 
-def generate_completeness_histograms(dataframe, category_column, value_column, title_prefix, output_path):
+def generate_completeness_chart(dataframe, category_column, title_label, sort_cols, output_path):
     """
-    Generates histograms for completeness values (mean, min, max, amplitude) for each item in a category
-    and saves them to a single PDF file.
+    Horizontal bar chart with min-max error bars and max bar highlighted,
+    matching R's plot_completeness() output.
     """
     if dataframe.empty:
-        print(f"No data to generate histograms for {title_prefix}.")
         return
 
+    plot_data = dataframe.copy()
+    valid_sort = [c for c in sort_cols if c in plot_data.columns]
+    plot_data = plot_data.sort_values(valid_sort) if valid_sort else plot_data.sort_values('mean_complete')
+
+    max_val = plot_data['mean_complete'].max()
+    colors = ['firebrick' if v == max_val else 'steelblue' for v in plot_data['mean_complete']]
+    n = len(plot_data)
+    height = max(4, n * 0.4 + 2)
+
+    fig, ax = plt.subplots(figsize=(10, height))
+    y_pos = list(range(n))
+
+    ax.barh(y_pos, plot_data['mean_complete'].values, color=colors, alpha=0.8, height=0.7)
+
+    for i, (_, row) in enumerate(plot_data.iterrows()):
+        lo = max(0.0, row['mean_complete'] - row['min_complete'])
+        hi = max(0.0, row['max_complete'] - row['mean_complete'])
+        ax.errorbar(row['mean_complete'], i, xerr=[[lo], [hi]],
+                    fmt='none', color='dimgray', capsize=3, linewidth=0.6)
+        ax.text(min(row['max_complete'] + 1.0, 119), i,
+                f"{row['mean_complete']:.1f}%", va='center', ha='left', fontsize=7, color='dimgray')
+
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(plot_data[category_column].astype(str).tolist(), fontsize=7)
+    ax.set_xlim(0, 120)
+    ax.set_xticks(range(0, 101, 20))
+    ax.set_xlabel('Completude (%)')
+    fig.suptitle(f'Completude de Dados por {title_label}', fontweight='bold', fontsize=12)
+    ax.set_title('Média (barra) com amplitude min-max (barras de erro)', fontsize=9, color='gray')
+    ax.grid(axis='x', alpha=0.3, linewidth=0.5)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    plt.tight_layout()
+
     with PdfPages(output_path) as pdf:
-        # Plotting mean completeness
-        fig, ax = plt.subplots(figsize=(10, 6))
-        dataframe.set_index(category_column)['mean_complete'].plot(kind='bar', ax=ax, color='skyblue')
-        ax.set_title(f'{title_prefix} - Média de Completude')
-        ax.set_ylabel('Média de Completude (%)')
-        ax.set_xlabel(category_column.capitalize())
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
         pdf.savefig(fig)
-        plt.close(fig)
+    plt.close(fig)
 
-        # Plotting amplitude
-        fig, ax = plt.subplots(figsize=(10, 6))
-        dataframe.set_index(category_column)['amplitude'].plot(kind='bar', ax=ax, color='lightcoral')
-        ax.set_title(f'{title_prefix} - Amplitude de Completude')
-        ax.set_ylabel('Amplitude (%)')
-        ax.set_xlabel(category_column.capitalize())
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        pdf.savefig(fig)
-        plt.close(fig)
-
-        # Plotting min completeness
-        fig, ax = plt.subplots(figsize=(10, 6))
-        dataframe.set_index(category_column)['min_complete'].plot(kind='bar', ax=ax, color='lightgreen')
-        ax.set_title(f'{title_prefix} - Completude Mínima')
-        ax.set_ylabel('Completude Mínima (%)')
-        ax.set_xlabel(category_column.capitalize())
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        pdf.savefig(fig)
-        plt.close(fig)
-
-        # Plotting max completeness
-        fig, ax = plt.subplots(figsize=(10, 6))
-        dataframe.set_index(category_column)['max_complete'].plot(kind='bar', ax=ax, color='gold')
-        ax.set_title(f'{title_prefix} - Completude Máxima')
-        ax.set_ylabel('Completude Máxima (%)')
-        ax.set_xlabel(category_column.capitalize())
-        plt.xticks(rotation=45, ha='right')
-        plt.tight_layout()
-        pdf.savefig(fig)
-        plt.close(fig)
-
-# --- Python-based Analysis Function (omitted for brevity, no changes needed) ---
 def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
     try:
-        # ... (rest of the function is unchanged)
+        # --- Filter rows matching the requested taxon across all rank columns ---
         taxonomic_ranks = ['phylum', 'class', 'order', 'family', 'genus', 'scientificname']
-        mask = False
+        mask = pd.Series(False, index=planilha_df.index)
         for rank in taxonomic_ranks:
             if rank in planilha_df.columns:
                 mask |= (planilha_df[rank].str.lower() == taxon_filter.lower())
         filtered_data = planilha_df[mask].copy()
-        if filtered_data.empty: return None
+        if filtered_data.empty:
+            return None
+
         species_data = filtered_data[filtered_data['taxonrank'].isin(['ESPECIE', 'SUBESPECIE'])].copy()
-        if species_data.empty: return None
-        MANUAL_COLS = ["bibliographicreference", "country", "establishmentmeans", "endemicbrazil", "environment", "locality", "epicontinentaldomain", "marinedomain", "lifeform", "habitat", "vernacularname", "vernacularnamelanguage", "vernacularnamelocality", "animalhostnames", "vegetalhostnames"]
+        if species_data.empty:
+            return None
+
+        # --- 15 manual fields (regras.txt Section 3) ---
+        MANUAL_COLS = [
+            "bibliographicreference", "country", "establishmentmeans", "endemicbrazil",
+            "environment", "locality", "epicontinentaldomain", "marinedomain",
+            "lifeform", "habitat", "vernacularname", "vernacularnamelanguage",
+            "vernacularnamelocality", "animalhostnames", "vegetalhostnames",
+        ]
         manual_present = [col for col in MANUAL_COLS if col in species_data.columns]
-        def is_filled(series): return series.notna() & (series.astype(str).str.strip() != '')
+
+        def is_filled(series):
+            return series.notna() & (series.astype(str).str.strip() != '')
+
         filled_matrix = species_data[manual_present].apply(is_filled)
-        remove_marine = species_data['environment'].str.lower().str.strip() == "epicontinental"
-        remove_animal = species_data['lifeform'].str.lower().str.strip() == "herbivoro"
-        species_data['filled_count'] = filled_matrix.sum(axis=1)
+
+        # --- Ecological exclusion vectors (regras.txt Section 5) ---
+        if 'environment' in species_data.columns:
+            remove_marine = species_data['environment'].str.lower().str.strip() == "epicontinental"
+        else:
+            remove_marine = pd.Series(False, index=species_data.index)
+
+        if 'lifeform' in species_data.columns:
+            remove_animal = species_data['lifeform'].str.lower().str.strip() == "herbivoro"
+        else:
+            remove_animal = pd.Series(False, index=species_data.index)
+
+        # --- Adjust BOTH numerator and denominator (critical fix) ---
+        # R: filled_count -= as.integer(remove_marine & filled_matrix[, marine_idx])
+        filled_count = filled_matrix.sum(axis=1)
+        if 'marinedomain' in manual_present:
+            filled_count = filled_count - (remove_marine & filled_matrix['marinedomain']).astype(int)
+        if 'animalhostnames' in manual_present:
+            filled_count = filled_count - (remove_animal & filled_matrix['animalhostnames']).astype(int)
+
+        species_data['filled_count'] = filled_count.values
         species_data['total_applicable'] = len(manual_present)
-        if 'marinedomain' in manual_present: species_data.loc[remove_marine, 'total_applicable'] -= 1
-        if 'animalhostnames' in manual_present: species_data.loc[remove_animal, 'total_applicable'] -= 1
+        if 'marinedomain' in manual_present:
+            species_data.loc[remove_marine, 'total_applicable'] -= 1
+        if 'animalhostnames' in manual_present:
+            species_data.loc[remove_animal, 'total_applicable'] -= 1
         species_data['completeness'] = (species_data['filled_count'] / species_data['total_applicable']) * 100
+
+        # --- Aggregation helpers ---
         def most_common_val(x):
-            x = x.dropna()[x != ""]
-            if x.empty: return np.nan
-            return x.mode().iloc[0]
-        agg_funcs = {'n_species': ('scientificname', 'count'), 'mean_complete': ('completeness', 'mean'), 'min_complete': ('completeness', 'min'), 'max_complete': ('completeness', 'max')}
+            x = x.dropna()
+            x = x[x.astype(str).str.strip() != '']
+            return x.mode().iloc[0] if not x.empty else np.nan
+
+        # Context (parent) columns per level — mirrors R script exactly
+        HIERARCHY_CONTEXT = {
+            'family':   ['phylum', 'class', 'order'],
+            'order':    ['phylum', 'class'],
+            'class':    ['phylum'],
+            'subclass': ['phylum', 'class'],
+            'phylum':   [],
+        }
+
         def aggregate_by(level):
-            hierarchy = ['phylum', 'class', 'order', 'family', 'genus']
-            if level not in hierarchy: hierarchy.append(level)
-            group_cols = [col for col in hierarchy if col in species_data.columns and col not in [level]]
-            agg_dict = agg_funcs.copy()
-            for col in group_cols: agg_dict[col] = (col, most_common_val)
-            df = species_data.groupby(level).agg(**agg_dict).reset_index()
+            if level not in species_data.columns:
+                return pd.DataFrame()
+            context_cols = [c for c in HIERARCHY_CONTEXT.get(level, []) if c in species_data.columns]
+            agg_dict = {}
+            for col in context_cols:
+                agg_dict[col] = (col, most_common_val)
+            agg_dict.update({
+                'n_species':     ('taxonrank', 'count'),   # taxonrank always filled → equiv. to R's n()
+                'mean_complete': ('completeness', 'mean'),
+                'min_complete':  ('completeness', 'min'),
+                'max_complete':  ('completeness', 'max'),
+            })
+            df = species_data.dropna(subset=[level]).groupby(level).agg(**agg_dict).reset_index()
             df['amplitude'] = df['max_complete'] - df['min_complete']
-            return df.round(2)
-        by_family = aggregate_by('family'); by_order = aggregate_by('order'); by_class = aggregate_by('class'); by_subclass = aggregate_by('subclass'); by_phylum = aggregate_by('phylum')
+            sort_cols = [c for c in context_cols + [level] if c in df.columns]
+            return df.sort_values(sort_cols).round(2)
+
+        by_family   = aggregate_by('family')
+        by_order    = aggregate_by('order')
+        by_class    = aggregate_by('class')
+        by_subclass = aggregate_by('subclass')
+        by_phylum   = aggregate_by('phylum')
+
+        # --- Researcher lookup (split on both ; and ,) ---
         pesq_lookup = pesquisadores_df.dropna(subset=['taxons']).copy()
-        pesq_lookup['taxons'] = pesq_lookup['taxons'].str.split('[;,]')
+        pesq_lookup['taxons'] = pesq_lookup['taxons'].astype(str).str.split(r'[;,]', regex=True)
         pesq_lookup = pesq_lookup.explode('taxons')
         pesq_lookup['taxons'] = pesq_lookup['taxons'].str.strip()
-        pesq_map = pesq_lookup.groupby('taxons')['username'].apply(lambda x: '; '.join(x.unique())).to_dict()
-        def find_researcher(row, ranks):
-            for rank in ranks:
-                if rank in row and row[rank] in pesq_map: return pesq_map[row[rank]]
-            return np.nan
-        by_family['pesquisador'] = by_family.apply(find_researcher, ranks=['family', 'order', 'class', 'phylum'], axis=1)
-        by_order['pesquisador'] = by_order.apply(find_researcher, ranks=['order', 'class', 'phylum'], axis=1)
-        by_class['pesquisador'] = by_class.apply(find_researcher, ranks=['class', 'phylum'], axis=1)
-        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, ranks=['subclass', 'class', 'phylum'], axis=1)
-        by_phylum['pesquisador'] = by_phylum['phylum'].map(pesq_map)
-        
-        temp_dir = os.path.join(app.root_path, 'temp_analysis_output', taxon_filter.replace(" ", "_") + "_" + str(os.getpid()))
-        os.makedirs(temp_dir, exist_ok=True)
+        pesq_lookup = pesq_lookup[pesq_lookup['taxons'] != '']
+        pesq_map = (pesq_lookup.groupby('taxons')['username']
+                               .apply(lambda x: '; '.join(x.unique()))
+                               .to_dict())
 
-        # List to store paths of all generated files (XLSX and PDF)
+        def find_researcher(row, ranks):
+            for i, rank in enumerate(ranks):
+                val = row.get(rank, np.nan)
+                if pd.notna(val) and str(val).strip() and str(val) in pesq_map:
+                    name = pesq_map[str(val)]
+                    return name if i == 0 else f"{name} (via {rank})"
+            return np.nan
+
+        by_family['pesquisador']   = by_family.apply(find_researcher,   ranks=['family', 'order', 'class', 'phylum'], axis=1)
+        by_order['pesquisador']    = by_order.apply(find_researcher,    ranks=['order', 'class', 'phylum'], axis=1)
+        by_class['pesquisador']    = by_class.apply(find_researcher,    ranks=['class', 'phylum'], axis=1)
+        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, ranks=['subclass', 'class', 'phylum'], axis=1)
+        by_phylum['pesquisador']   = by_phylum['phylum'].map(pesq_map)
+
+        # --- top_first: put max mean_complete row first, mark with <<< MAX ---
+        def top_first(df, sort_cols):
+            if df.empty:
+                return df
+            max_idx = df['mean_complete'].idxmax()
+            max_row = df.loc[[max_idx]].copy()
+            max_row['max_flag'] = '<<< MAX'
+            rest = df.drop(max_idx).copy()
+            rest['max_flag'] = ''
+            valid = [c for c in sort_cols if c in rest.columns]
+            return pd.concat([max_row, rest.sort_values(valid) if valid else rest], ignore_index=True)
+
+        # Column ordering aligned with R script output
+        COL_ORDER = {
+            'family':   ['phylum', 'class', 'order', 'family',   'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'order':    ['phylum', 'class', 'order',             'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'class':    ['phylum', 'class',                      'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'subclass': ['phylum', 'class', 'subclass',          'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'phylum':   ['phylum',                               'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+        }
+
+        def reorder(df, level, sort_cols):
+            df = top_first(df, sort_cols)
+            cols = [c for c in COL_ORDER[level] if c in df.columns]
+            return df[cols]
+
+        by_family_out   = reorder(by_family,   'family',   ['phylum', 'class', 'order', 'family'])
+        by_order_out    = reorder(by_order,    'order',    ['phylum', 'class', 'order'])
+        by_class_out    = reorder(by_class,    'class',    ['phylum', 'class'])
+        by_subclass_out = reorder(by_subclass, 'subclass', ['phylum', 'class', 'subclass'])
+        by_phylum_out   = reorder(by_phylum,   'phylum',   ['phylum'])
+
+        # --- Species export: selected columns + pesquisador with subclass fallback ---
+        species_cols = ['taxonid', 'scientificname', 'phylum', 'class', 'subclass', 'order',
+                        'family', 'taxonrank', 'completeness', 'filled_count', 'total_applicable']
+        species_export = species_data[[c for c in species_cols if c in species_data.columns]].copy()
+        species_export['pesquisador'] = species_export.apply(
+            find_researcher, ranks=['family', 'order', 'subclass', 'class', 'phylum'], axis=1
+        )
+        sort_sp = [c for c in ['phylum', 'class', 'subclass', 'order', 'family', 'scientificname']
+                   if c in species_export.columns]
+        if sort_sp:
+            species_export = species_export.sort_values(sort_sp)
+        species_export['completeness'] = species_export['completeness'].round(2)
+
+        # --- Write files ---
+        temp_dir = os.path.join(app.root_path, 'temp_analysis_output',
+                                taxon_filter.replace(" ", "_") + "_" + str(os.getpid()))
+        os.makedirs(temp_dir, exist_ok=True)
         generated_files = []
 
-        # Save dataframes to XLSX
-        by_family_path = os.path.join(temp_dir, "completeness_by_family.xlsx")
-        by_family.to_excel(by_family_path, index=False)
-        generated_files.append(by_family_path)
+        for fname, df in [
+            ("completeness_by_family.xlsx",   by_family_out),
+            ("completeness_by_order.xlsx",    by_order_out),
+            ("completeness_by_class.xlsx",    by_class_out),
+            ("completeness_by_subclass.xlsx", by_subclass_out),
+            ("completeness_by_phylum.xlsx",   by_phylum_out),
+            ("completeness_per_species.xlsx", species_export),
+        ]:
+            path = os.path.join(temp_dir, fname)
+            df.to_excel(path, index=False)
+            generated_files.append(path)
 
-        by_order_path = os.path.join(temp_dir, "completeness_by_order.xlsx")
-        by_order.to_excel(by_order_path, index=False)
-        generated_files.append(by_order_path)
-
-        by_class_path = os.path.join(temp_dir, "completeness_by_class.xlsx")
-        by_class.to_excel(by_class_path, index=False)
-        generated_files.append(by_class_path)
-
-        by_subclass_path = os.path.join(temp_dir, "completeness_by_subclass.xlsx")
-        by_subclass.to_excel(by_subclass_path, index=False)
-        generated_files.append(by_subclass_path)
-
-        by_phylum_path = os.path.join(temp_dir, "completeness_by_phylum.xlsx")
-        by_phylum.to_excel(by_phylum_path, index=False)
-        generated_files.append(by_phylum_path)
-
-        species_data_path = os.path.join(temp_dir, "completeness_per_species.xlsx")
-        species_data.to_excel(species_data_path, index=False)
-        generated_files.append(species_data_path)
-
-        # Generate and save histograms as PDFs
-        pdf_family_path = os.path.join(temp_dir, "completeness_histograms_family.pdf")
-        generate_completeness_histograms(by_family, 'family', 'amplitude', 'Completude por Família', pdf_family_path)
-        generated_files.append(pdf_family_path)
-
-        pdf_order_path = os.path.join(temp_dir, "completeness_histograms_order.pdf")
-        generate_completeness_histograms(by_order, 'order', 'amplitude', 'Completude por Ordem', pdf_order_path)
-        generated_files.append(pdf_order_path)
-
-        pdf_class_path = os.path.join(temp_dir, "completeness_histograms_class.pdf")
-        generate_completeness_histograms(by_class, 'class', 'amplitude', 'Completude por Classe', pdf_class_path)
-        generated_files.append(pdf_class_path)
-
-        pdf_subclass_path = os.path.join(temp_dir, "completeness_histograms_subclass.pdf")
-        generate_completeness_histograms(by_subclass, 'subclass', 'amplitude', 'Completude por Subclasse', pdf_subclass_path)
-        generated_files.append(pdf_subclass_path)
-
-        pdf_phylum_path = os.path.join(temp_dir, "completeness_histograms_phylum.pdf")
-        generate_completeness_histograms(by_phylum, 'phylum', 'amplitude', 'Completude por Filo', pdf_phylum_path)
-        generated_files.append(pdf_phylum_path)
+        for fname, df, col, label, sort_cols in [
+            ("completeness_histograms_family.pdf",   by_family,   'family',   'Família',   ['phylum', 'class', 'order', 'family']),
+            ("completeness_histograms_order.pdf",    by_order,    'order',    'Ordem',     ['phylum', 'class', 'order']),
+            ("completeness_histograms_class.pdf",    by_class,    'class',    'Classe',    ['phylum', 'class']),
+            ("completeness_histograms_subclass.pdf", by_subclass, 'subclass', 'Subclasse', ['phylum', 'class', 'subclass']),
+            ("completeness_histograms_phylum.pdf",   by_phylum,   'phylum',   'Filo',      ['phylum']),
+        ]:
+            path = os.path.join(temp_dir, fname)
+            generate_completeness_chart(df, col, label, sort_cols, path)
+            if os.path.exists(path):
+                generated_files.append(path)
 
         zip_filename = f"{taxon_filter.replace(' ', '_')}_analysis_results.zip"
         zip_filepath = os.path.join(app.root_path, 'temp_zips', zip_filename)
         os.makedirs(os.path.dirname(zip_filepath), exist_ok=True)
-        
         with zipfile.ZipFile(zip_filepath, 'w') as zf:
             for file_path in generated_files:
                 zf.write(file_path, os.path.basename(file_path))
@@ -302,7 +382,8 @@ def login():
                 user_data = PESQUISADORES_DF[PESQUISADORES_DF['username'].str.lower() == user.username.lower()]
                 if not user_data.empty:
                     taxa_str = user_data.iloc[0]['taxons']
-                    session['allowed_taxa'] = sorted([t.strip().lower() for t in taxa_str.split(',')] if isinstance(taxa_str, str) else [])
+                    import re as _re
+                    session['allowed_taxa'] = sorted([t.strip().lower() for t in _re.split(r'[;,]', taxa_str)] if isinstance(taxa_str, str) else [])
             flash('Logged in successfully!', 'success')
             return redirect(url_for('index'))
         else:
@@ -340,7 +421,7 @@ def analyze_taxon():
         return redirect(url_for('index'))
 
     if not user.is_admin and not is_taxon_authorized(taxon_input, session.get('allowed_taxa', [])):
-        flash(f"Taxon '{taxon_input}' is not allowed for analysis.', 'danger')
+        flash(f"Taxon '{taxon_input}' is not allowed for analysis.", 'danger')
         return redirect(url_for('index'))
 
     result_zip_path = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
