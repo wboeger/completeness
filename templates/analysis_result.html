@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultado — {{ summary.taxon }} — Porcentômetro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9;
+               display: flex; justify-content: center; align-items: flex-start;
+               min-height: 100vh; margin: 0; padding: 2.5rem 1rem; box-sizing: border-box; }
+        .container { background: white; border-radius: 10px;
+                     box-shadow: 0 2px 12px rgba(0,0,0,.1);
+                     width: 100%; max-width: 640px; padding: 2rem 2.5rem; }
+        h1 { margin: 0 0 .2rem; color: #2c3e50; font-size: 1.5rem; }
+        .subtitle { color: #7f8c8d; font-size: .9rem; margin-bottom: 1.5rem; }
+
+        /* taxon banner */
+        .taxon-banner {
+            background: #eaf4fd; border: 1.5px solid #aed6f1;
+            border-radius: 8px; padding: .9rem 1.2rem;
+            margin-bottom: 1.4rem; display: flex; align-items: baseline; gap: .7rem;
+        }
+        .taxon-label { font-size: .82rem; color: #1a5276; font-weight: 600; white-space: nowrap; }
+        .taxon-name  { font-size: 1.25rem; font-weight: 700; color: #1a3a5c; font-style: italic; }
+
+        /* stats grid */
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin-bottom: 1.4rem; }
+        .stat-card { background: #f4f6f9; border-radius: 8px; padding: .9rem 1rem; text-align: center; }
+        .stat-card .n   { font-size: 1.7rem; font-weight: 700; color: #2c3e50; line-height: 1; }
+        .stat-card .lbl { font-size: .75rem; color: #7f8c8d; margin-top: .25rem; }
+        .stat-card.highlight .n { color: #2980b9; }
+
+        /* breakdown */
+        .breakdown { background: #f4f6f9; border-radius: 8px; padding: .9rem 1.2rem;
+                     margin-bottom: 1.4rem; font-size: .9rem; }
+        .breakdown-row { display: flex; justify-content: space-between;
+                         padding: .3rem 0; border-bottom: 1px solid #dce1e7; }
+        .breakdown-row:last-child { border-bottom: none; }
+        .breakdown-row .lbl { color: #555; }
+        .breakdown-row .val { font-weight: 600; color: #2c3e50; }
+
+        /* download button */
+        .btn-dl { display: block; width: 100%; padding: .85rem; background: #27ae60;
+                  color: white; border: none; border-radius: 6px; font-size: 1.05rem;
+                  font-weight: 700; cursor: pointer; text-align: center;
+                  text-decoration: none; box-sizing: border-box; margin-bottom: .7rem; }
+        .btn-dl:hover { background: #219a52; }
+        .btn-back { display: block; text-align: center; font-size: .88rem;
+                    color: #2980b9; text-decoration: none; margin-top: .4rem; }
+        .btn-back:hover { text-decoration: underline; }
+
+        .note { font-size: .8rem; color: #95a5a6; text-align: center; margin-top: .5rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Porcentômetro</h1>
+    <p class="subtitle">Análise de completude dos dados · {{ summary.taxon }}</p>
+
+    <!-- Taxon banner -->
+    <div class="taxon-banner">
+        <span class="taxon-label">Táxon analisado:</span>
+        <span class="taxon-name">{{ summary.taxon }}</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+        <div class="stat-card highlight">
+            <div class="n">{{ summary.n_spp_ctfb }}</div>
+            <div class="lbl">spp / subsp no CTFB<br>(unidades analisadas)</div>
+        </div>
+        <div class="stat-card">
+            <div class="n">{{ summary.mean_complete }}%</div>
+            <div class="lbl">completude média</div>
+        </div>
+        <div class="stat-card">
+            <div class="n">{{ summary.n_families }}</div>
+            <div class="lbl">famílias</div>
+        </div>
+    </div>
+
+    <!-- Breakdown -->
+    <div class="breakdown">
+        {% if summary.n_subsp > 0 %}
+        <div class="breakdown-row">
+            <span class="lbl">Espécies (sem subespécies)</span>
+            <span class="val">{{ summary.n_species }}</span>
+        </div>
+        <div class="breakdown-row">
+            <span class="lbl">Subespécies (espécie pai excluída)</span>
+            <span class="val">{{ summary.n_subsp }}</span>
+        </div>
+        {% else %}
+        <div class="breakdown-row">
+            <span class="lbl">Espécies analisadas</span>
+            <span class="val">{{ summary.n_species }}</span>
+        </div>
+        {% endif %}
+        <div class="breakdown-row">
+            <span class="lbl">Ordens</span>
+            <span class="val">{{ summary.n_orders }}</span>
+        </div>
+        <div class="breakdown-row">
+            <span class="lbl">Classes</span>
+            <span class="val">{{ summary.n_classes }}</span>
+        </div>
+    </div>
+
+    <!-- Download -->
+    <a class="btn-dl" href="{{ url_for('analysis_download', result_id=result_id) }}">
+        Baixar resultados (ZIP)
+    </a>
+    <p class="note">
+        O ZIP contém planilhas XLSX por família, ordem, classe, subclasse, filo e
+        espécie/subespécie, mais gráficos PDF de completude.
+    </p>
+    <a class="btn-back" href="{{ url_for('index') }}">← Nova análise</a>
+</div>
+</body>
+</html>

@@ -668,15 +668,27 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 zf.write(file_path, os.path.basename(file_path))
 
         shutil.rmtree(temp_dir)
-        return zip_filepath
+
+        summary = {
+            'taxon':        taxon_filter,
+            'n_spp_ctfb':   int(len(species_data)),
+            'n_species':    int((species_data['taxonrank'] == 'ESPECIE').sum()),
+            'n_subsp':      int((species_data['taxonrank'] == 'SUBESPECIE').sum()),
+            'mean_complete': round(float(species_data['completeness'].mean()), 1),
+            'n_families':   int(species_data['family'].nunique())   if 'family'  in species_data.columns else 0,
+            'n_orders':     int(species_data['order'].nunique())    if 'order'   in species_data.columns else 0,
+            'n_classes':    int(species_data['class'].nunique())    if 'class'   in species_data.columns else 0,
+        }
+        return zip_filepath, summary
     except Exception as e:
         print(f"An error occurred during Python analysis: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        return None, None
 
 # --- Flask Routes ---
 _USING_POSTGRES = 'postgresql' in DATABASE_URL
+ANALYSIS_RESULTS = {}   # result_id → {zip_path, summary}
 
 with app.app_context():
     load_data_on_startup()
@@ -786,13 +798,40 @@ def analyze_taxon():
         flash(f"Taxon '{taxon_input}' is not allowed for analysis.", 'danger')
         return redirect(url_for('index'))
 
-    result_zip_path = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
+    result_zip_path, summary = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
 
-    if result_zip_path:
-        return send_file(result_zip_path, as_attachment=True)
+    if result_zip_path and summary:
+        result_id = uuid.uuid4().hex
+        ANALYSIS_RESULTS[result_id] = {'zip_path': result_zip_path, 'summary': summary}
+        return redirect(url_for('analysis_result', result_id=result_id))
     else:
         flash(f"Analysis failed for '{taxon_input}'. Check server logs for details.", 'danger')
         return redirect(url_for('index'))
+
+@app.route('/result/<result_id>')
+def analysis_result(result_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    entry = ANALYSIS_RESULTS.get(result_id)
+    if not entry:
+        flash('Resultado não encontrado ou expirado.', 'danger')
+        return redirect(url_for('index'))
+    user = User.query.get(session['user_id'])
+    return render_template('analysis_result.html',
+                           summary=entry['summary'],
+                           result_id=result_id,
+                           username=user.username,
+                           is_admin=user.is_admin)
+
+@app.route('/result/<result_id>/download')
+def analysis_download(result_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    entry = ANALYSIS_RESULTS.get(result_id)
+    if not entry or not os.path.exists(entry['zip_path']):
+        flash('Arquivo não disponível.', 'danger')
+        return redirect(url_for('index'))
+    return send_file(entry['zip_path'], as_attachment=True)
 
 @app.route('/admin')
 def admin_dashboard():
