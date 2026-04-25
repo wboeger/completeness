@@ -60,43 +60,65 @@ def download_gsheet(url):
         print(f"FATAL: Could not download Google Sheet from {url}. Error: {e}")
         return None
 
+LOCAL_PESQUISADORES = os.path.join(os.path.dirname(__file__), 'data', 'pesquisadores.xlsx')
+LOCAL_PLANILHA      = os.path.join(os.path.dirname(__file__), 'data', 'planilha_extendida.xlsx')
+
 def load_data_on_startup():
     global TAXON_HIERARCHY, PESQUISADORES_DF, PLANILHA_DF, DATA_LOADED_SUCCESSFULLY
-    
-    pesquisadores_content = download_gsheet(PESQUISADORES_SHEET_URL)
-    if pesquisadores_content:
-        PESQUISADORES_DF = pd.read_excel(BytesIO(pesquisadores_content), header=0)
-        PESQUISADORES_DF.columns = [c.lower().strip() for c in PESQUISADORES_DF.columns]
-        print(f"Loaded {len(PESQUISADORES_DF)} researchers from Google Sheet.")
 
-    planilha_content = download_gsheet(PLANILHA_EXTENDIDA_SHEET_URL)
-    if planilha_content:
-        PLANILHA_DF = pd.read_excel(BytesIO(planilha_content))
-        print(f"Loaded {len(PLANILHA_DF)} records from main data sheet.")
-        PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
-        
-        taxonomic_ranks = ['phylum', 'class', 'order', 'family', 'genus', 'scientificname']
-        valid_ranks = [rank for rank in taxonomic_ranks if rank in PLANILHA_DF.columns]
-        df_taxons = PLANILHA_DF.dropna(subset=valid_ranks[:-1]).copy()
+    # --- pesquisadores ---
+    try:
+        content = download_gsheet(PESQUISADORES_SHEET_URL)
+        if content:
+            PESQUISADORES_DF = pd.read_excel(BytesIO(content), header=0)
+            print("Loaded pesquisadores from Google Sheet.")
+        elif os.path.exists(LOCAL_PESQUISADORES):
+            PESQUISADORES_DF = pd.read_excel(LOCAL_PESQUISADORES, header=0)
+            print("Loaded pesquisadores from local file (Google Sheet unavailable).")
+        if PESQUISADORES_DF is not None:
+            PESQUISADORES_DF.columns = [c.lower().strip() for c in PESQUISADORES_DF.columns]
+            print(f"  {len(PESQUISADORES_DF)} researchers loaded.")
+    except Exception as e:
+        print(f"ERROR loading pesquisadores: {e}")
 
-        for rank_index in range(len(valid_ranks) - 1):
-            parent_rank = valid_ranks[rank_index]
-            child_rank = valid_ranks[rank_index + 1]
-            
-            for _, row in df_taxons[[child_rank, parent_rank]].iterrows():
-                child_name = str(row[child_rank]).strip().lower()
-                parent_name = str(row[parent_rank]).strip().lower()
-                if child_name and parent_name and child_name != 'nan' and parent_name != 'nan':
-                    if child_name not in TAXON_HIERARCHY:
-                        TAXON_HIERARCHY[child_name] = parent_name
-        
-        print(f"Built taxon hierarchy with {len(TAXON_HIERARCHY)} relationships.")
+    # --- planilha extendida ---
+    try:
+        content = download_gsheet(PLANILHA_EXTENDIDA_SHEET_URL)
+        if content:
+            PLANILHA_DF = pd.read_excel(BytesIO(content))
+            print("Loaded planilha from Google Sheet.")
+        elif os.path.exists(LOCAL_PLANILHA):
+            PLANILHA_DF = pd.read_excel(LOCAL_PLANILHA)
+            print("Loaded planilha from local file (Google Sheet unavailable).")
+        if PLANILHA_DF is not None:
+            PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
+            print(f"  {len(PLANILHA_DF)} records loaded.")
+    except Exception as e:
+        print(f"ERROR loading planilha: {e}")
+
+    # --- build taxon hierarchy ---
+    if PLANILHA_DF is not None:
+        try:
+            taxonomic_ranks = ['phylum', 'class', 'order', 'family', 'genus', 'scientificname']
+            valid_ranks = [r for r in taxonomic_ranks if r in PLANILHA_DF.columns]
+            for i in range(len(valid_ranks) - 1):
+                parent_rank = valid_ranks[i]
+                child_rank  = valid_ranks[i + 1]
+                pairs = PLANILHA_DF[[child_rank, parent_rank]].dropna()
+                for child, parent in zip(pairs[child_rank].str.strip().str.lower(),
+                                         pairs[parent_rank].str.strip().str.lower()):
+                    if child and parent and child != 'nan' and parent != 'nan':
+                        if child not in TAXON_HIERARCHY:
+                            TAXON_HIERARCHY[child] = parent
+            print(f"Built taxon hierarchy with {len(TAXON_HIERARCHY)} relationships.")
+        except Exception as e:
+            print(f"ERROR building taxon hierarchy: {e}")
 
     if PESQUISADORES_DF is not None and PLANILHA_DF is not None:
         DATA_LOADED_SUCCESSFULLY = True
         print("Data loading successful.")
     else:
-        print("Data loading failed.")
+        print("Data loading FAILED — check Google Sheet URLs and local fallback files.")
 
 def generate_completeness_chart(dataframe, category_column, title_label, sort_cols, output_path):
     """
