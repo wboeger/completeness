@@ -870,6 +870,22 @@ def import_users_csv():
     current_user = User.query.get(session['user_id'])
     return render_template('import_users_csv.html', username=current_user.username, is_admin=True)
 
+@app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
+def reset_password(user_id):
+    """Admin action: clear a user's password so they must set a new one on next login."""
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    target = User.query.get_or_404(user_id)
+    if target.username == 'admin' and target.id == session['user_id']:
+        flash('Você não pode redefinir sua própria senha por aqui.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    target.password_hash = None
+    target.must_set_password = True
+    db.session.commit()
+    flash(f'Senha de "{target.username}" redefinida. O usuário deverá criar uma nova senha no próximo acesso.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
 @app.route('/admin/bulk_add_users', methods=['GET', 'POST'])
 def bulk_add_users():
     if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:

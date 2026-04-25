@@ -1,30 +1,68 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>Login — Porcentômetro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { display: flex; justify-content: center; align-items: center;
+               min-height: 100vh; background: #f4f6f9; margin: 0; }
+        .card { background: white; padding: 2.5rem 3rem; border-radius: 8px;
+                box-shadow: 0 2px 12px rgba(0,0,0,.12); width: 100%; max-width: 400px; }
+        h2 { margin: 0 0 .2rem; color: #2c3e50; font-size: 1.5rem; }
+        .app-name { color: #7f8c8d; font-size: .9rem; margin-bottom: 1.5rem; }
+        label { display: block; font-weight: 600; margin-bottom: .3rem;
+                color: #34495e; font-size: .95rem; }
+        input[type=text], input[type=password] {
+            width: 100%; padding: .6rem .8rem; border: 1px solid #ccc;
+            border-radius: 5px; font-size: 1rem; box-sizing: border-box; margin-bottom: 1rem; }
+        input:focus { outline: none; border-color: #3498db;
+                      box-shadow: 0 0 0 2px rgba(52,152,219,.2); }
+        button { width: 100%; padding: .75rem; background: #2980b9; color: white;
+                 border: none; border-radius: 5px; font-size: 1rem;
+                 font-weight: 600; cursor: pointer; }
+        button:hover { background: #2471a3; }
+        .flashes { list-style: none; padding: 0; margin-bottom: 1rem; }
+        .flashes li { padding: .6rem .9rem; margin-bottom: .5rem;
+                      border-radius: 5px; font-size: .9rem; }
+        .flashes .danger  { background: #f8d7da; color: #721c24; }
+        .flashes .success { background: #d4edda; color: #155724; }
+        .forgot { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid #eee;
+                  font-size: .83rem; color: #7f8c8d; text-align: center; line-height: 1.5; }
+        .forgot a { color: #2980b9; text-decoration: none; }
+        .forgot a:hover { text-decoration: underline; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Login</h2>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flashes">
-                {% for category, message in messages %}
-                    <li class="{{ category }}">{{ message }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
-        <form method="POST" action="{{ url_for('login') }}">
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
-            <label for="password">Password:</label>
-            <input type="password" id="password" name="password" required>
-            <button type="submit">Login</button>
-        </form>
+<div class="card">
+    <h2>Porcentômetro</h2>
+    <p class="app-name">Catálogo Taxonômico da Fauna do Brasil</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+                <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+        <label for="username">Usuário (login)</label>
+        <input type="text" id="username" name="username" required autofocus>
+        <label for="password">Senha</label>
+        <input type="password" id="password" name="password" required>
+        <button type="submit">Entrar</button>
+    </form>
+
+    <div class="forgot">
+        <strong>Esqueceu sua senha?</strong><br>
+        Peça ao administrador do sistema para redefinir seu acesso,<br>
+        ou escreva para
+        <a href="mailto:faunadobrasilctfb@gmail.com">faunadobrasilctfb@gmail.com</a>
     </div>
+</div>
 </body>
 </html>
