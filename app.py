@@ -146,15 +146,37 @@ def generate_completeness_chart(dataframe, category_column, title_label, sort_co
 
 def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
     try:
+        # Full taxonomic rank hierarchy (coarser → finer)
+        RANK_HIERARCHY = [
+            'phylum', 'superclass', 'class', 'subclass', 'infraclass',
+            'superorder', 'order', 'suborder', 'infraorder',
+            'superfamily', 'family', 'subfamily', 'tribe', 'subtribe',
+            'genus', 'subgenus',
+        ]
+
         # --- Filter rows matching the requested taxon across all rank columns ---
-        taxonomic_ranks = ['phylum', 'class', 'order', 'family', 'genus', 'scientificname']
         mask = pd.Series(False, index=planilha_df.index)
-        for rank in taxonomic_ranks:
+        for rank in RANK_HIERARCHY:
             if rank in planilha_df.columns:
                 mask |= (planilha_df[rank].str.lower() == taxon_filter.lower())
         filtered_data = planilha_df[mask].copy()
         if filtered_data.empty:
             return None
+
+        # Determine which rank the input taxon belongs to
+        taxon_rank_col = None
+        for col in RANK_HIERARCHY:
+            if col in filtered_data.columns:
+                if (filtered_data[col].str.lower() == taxon_filter.lower()).any():
+                    taxon_rank_col = col
+                    break
+        taxon_rank_idx = RANK_HIERARCHY.index(taxon_rank_col) if taxon_rank_col else -1
+
+        def is_below_input_rank(level):
+            """True only if level is strictly finer than the input taxon's rank."""
+            if taxon_rank_idx < 0 or level not in RANK_HIERARCHY:
+                return True
+            return RANK_HIERARCHY.index(level) > taxon_rank_idx
 
         species_data = filtered_data[filtered_data['taxonrank'].isin(['ESPECIE', 'SUBESPECIE'])].copy()
         if species_data.empty:
@@ -234,11 +256,12 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             sort_cols = [c for c in context_cols + [level] if c in df.columns]
             return df.sort_values(sort_cols).round(2)
 
-        by_family   = aggregate_by('family')
-        by_order    = aggregate_by('order')
-        by_class    = aggregate_by('class')
-        by_subclass = aggregate_by('subclass')
-        by_phylum   = aggregate_by('phylum')
+        # Only aggregate ranks strictly finer than the input taxon's rank
+        by_family   = aggregate_by('family')   if is_below_input_rank('family')   else pd.DataFrame()
+        by_order    = aggregate_by('order')    if is_below_input_rank('order')    else pd.DataFrame()
+        by_class    = aggregate_by('class')    if is_below_input_rank('class')    else pd.DataFrame()
+        by_subclass = aggregate_by('subclass') if is_below_input_rank('subclass') else pd.DataFrame()
+        by_phylum   = aggregate_by('phylum')   if is_below_input_rank('phylum')   else pd.DataFrame()
 
         # --- Researcher lookup ---
         # pesq_map: Táxons value → nome_completo (full name, not login username)
@@ -251,23 +274,28 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                                .apply(lambda x: '; '.join(x.dropna().unique()))
                                .to_dict())
 
-        def find_researcher(row, parent_ranks):
-            """Return nome_completo of the researcher responsible for the
-            immediately superior taxonomic category (parent_ranks[0]), with
-            cascade fallback to higher ranks if not found."""
-            for i, rank in enumerate(parent_ranks):
+        def find_researcher(row, search_ranks):
+            """Return nome_completo of the closest researcher going up the hierarchy.
+            Tries search_ranks[0] (same level) first, then each superior rank in
+            order. Annotates with '(via X)' when resolved above the first rank."""
+            for i, rank in enumerate(search_ranks):
                 val = row.get(rank, np.nan)
                 if pd.notna(val) and str(val).strip() and str(val) in pesq_map:
                     name = pesq_map[str(val)]
                     return name if i == 0 else f"{name} (via {rank})"
             return np.nan
 
-        # Lookup: same level, then ONE level immediately above — no further cascade
-        by_family['pesquisador']   = by_family.apply(find_researcher,   parent_ranks=['family',   'order'],   axis=1)
-        by_order['pesquisador']    = by_order.apply(find_researcher,    parent_ranks=['order',    'class'],   axis=1)
-        by_class['pesquisador']    = by_class.apply(find_researcher,    parent_ranks=['class',    'phylum'],  axis=1)
-        by_subclass['pesquisador'] = by_subclass.apply(find_researcher, parent_ranks=['subclass', 'class'],   axis=1)
-        by_phylum['pesquisador']   = by_phylum['phylum'].map(pesq_map)
+        # Full cascade up the hierarchy — closest responsible researcher wins
+        if not by_family.empty:
+            by_family['pesquisador']   = by_family.apply(find_researcher,   search_ranks=['family', 'order', 'class', 'phylum'], axis=1)
+        if not by_order.empty:
+            by_order['pesquisador']    = by_order.apply(find_researcher,    search_ranks=['order', 'class', 'phylum'], axis=1)
+        if not by_class.empty:
+            by_class['pesquisador']    = by_class.apply(find_researcher,    search_ranks=['class', 'phylum'], axis=1)
+        if not by_subclass.empty:
+            by_subclass['pesquisador'] = by_subclass.apply(find_researcher, search_ranks=['subclass', 'class', 'phylum'], axis=1)
+        if not by_phylum.empty:
+            by_phylum['pesquisador']   = by_phylum['phylum'].map(pesq_map)
 
         # --- top_first: put max mean_complete row first, mark with <<< MAX ---
         def top_first(df, sort_cols):
@@ -295,19 +323,19 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             cols = [c for c in COL_ORDER[level] if c in df.columns]
             return df[cols]
 
-        by_family_out   = reorder(by_family,   'family',   ['phylum', 'class', 'order', 'family'])
-        by_order_out    = reorder(by_order,    'order',    ['phylum', 'class', 'order'])
-        by_class_out    = reorder(by_class,    'class',    ['phylum', 'class'])
-        by_subclass_out = reorder(by_subclass, 'subclass', ['phylum', 'class', 'subclass'])
-        by_phylum_out   = reorder(by_phylum,   'phylum',   ['phylum'])
+        by_family_out   = reorder(by_family,   'family',   ['phylum', 'class', 'order', 'family']) if not by_family.empty   else pd.DataFrame()
+        by_order_out    = reorder(by_order,    'order',    ['phylum', 'class', 'order'])           if not by_order.empty    else pd.DataFrame()
+        by_class_out    = reorder(by_class,    'class',    ['phylum', 'class'])                    if not by_class.empty    else pd.DataFrame()
+        by_subclass_out = reorder(by_subclass, 'subclass', ['phylum', 'class', 'subclass'])        if not by_subclass.empty else pd.DataFrame()
+        by_phylum_out   = reorder(by_phylum,   'phylum',   ['phylum'])                             if not by_phylum.empty   else pd.DataFrame()
 
         # --- Species export: selected columns + pesquisador with subclass fallback ---
         species_cols = ['taxonid', 'scientificname', 'phylum', 'class', 'subclass', 'order',
                         'family', 'taxonrank', 'completeness', 'filled_count', 'total_applicable']
         species_export = species_data[[c for c in species_cols if c in species_data.columns]].copy()
-        # Species: family (same level as the group responsible for the species), then order
+        # Species: climb hierarchy from family upward until a responsible researcher is found
         species_export['pesquisador'] = species_export.apply(
-            find_researcher, parent_ranks=['family', 'order'], axis=1
+            find_researcher, search_ranks=['family', 'order', 'class', 'phylum'], axis=1
         )
         sort_sp = [c for c in ['phylum', 'class', 'subclass', 'order', 'family', 'scientificname']
                    if c in species_export.columns]
@@ -329,6 +357,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             ("completeness_by_phylum.xlsx",   by_phylum_out),
             ("completeness_per_species.xlsx", species_export),
         ]:
+            if df.empty:
+                continue
             path = os.path.join(temp_dir, fname)
             df.to_excel(path, index=False)
             generated_files.append(path)
@@ -340,6 +370,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             ("completeness_histograms_subclass.pdf", by_subclass, 'subclass', 'Subclasse', ['phylum', 'class', 'subclass']),
             ("completeness_histograms_phylum.pdf",   by_phylum,   'phylum',   'Filo',      ['phylum']),
         ]:
+            if df.empty:
+                continue
             path = os.path.join(temp_dir, fname)
             generate_completeness_chart(df, col, label, sort_cols, path)
             if os.path.exists(path):
