@@ -19,33 +19,33 @@
             {% endif %}
         {% endwith %}
 
-        <h3>Users</h3>
+        <h3>Usuários</h3>
         <table>
             <thead>
                 <tr>
-                    <th>Username</th>
+                    <th>Login</th>
                     <th>Admin</th>
-                    <th>Created At</th>
-                    <th>Actions</th>
+                    <th>Senha definida</th>
+                    <th>Criado em</th>
                 </tr>
             </thead>
             <tbody>
                 {% for user in users %}
                 <tr>
                     <td>{{ user.username }}</td>
-                    <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
-                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td>
-                        <!-- Add edit/delete functionality later if needed -->
-                        <a href="#">Edit</a> | <a href="#">Delete</a>
-                    </td>
+                    <td>{{ 'Sim' if user.is_admin else 'Não' }}</td>
+                    <td>{{ 'Não (1º acesso pendente)' if user.must_set_password else 'Sim' }}</td>
+                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '—' }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        <p><a href="{{ url_for('add_user') }}">Add New User</a></p>
-        <p><a href="{{ url_for('index') }}">Back to Main Page</a></p>
-        <p><a href="{{ url_for('logout') }}">Logout</a></p>
+        <p>
+            <a href="{{ url_for('bulk_add_users') }}"><strong>Importar usuários em lote</strong></a>
+            &nbsp;|&nbsp;
+            <a href="{{ url_for('add_user') }}">Adicionar usuário individual</a>
+        </p>
+        <p><a href="{{ url_for('index') }}">← Página principal</a> &nbsp;|&nbsp; <a href="{{ url_for('logout') }}">Sair</a></p>
     </div>
 </body>
 </html>

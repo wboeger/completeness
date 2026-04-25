@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Importar Usuários — Porcentômetro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; margin: 0; padding: 2rem; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { color: #2c3e50; margin-bottom: .25rem; }
+        .subtitle { color: #7f8c8d; margin-bottom: 2rem; font-size: .95rem; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 2rem; margin-bottom: 1.5rem; }
+        label { font-weight: 600; color: #34495e; display: block; margin-bottom: .5rem; }
+        textarea { width: 100%; height: 200px; padding: .7rem; border: 1px solid #ccc; border-radius: 5px; font-family: monospace; font-size: .9rem; box-sizing: border-box; resize: vertical; }
+        textarea:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52,152,219,.2); }
+        .hint { font-size: .82rem; color: #95a5a6; margin-top: .4rem; margin-bottom: 1.2rem; }
+        button[type=submit] { background: #2980b9; color: white; border: none; padding: .7rem 2rem; border-radius: 5px; font-size: 1rem; font-weight: 600; cursor: pointer; }
+        button[type=submit]:hover { background: #2471a3; }
+        .results { margin-top: 1.5rem; }
+        .result-row { display: flex; align-items: flex-start; gap: .6rem; padding: .55rem .8rem; border-radius: 5px; margin-bottom: .4rem; font-size: .88rem; }
+        .result-row.success { background: #eafaf1; border: 1px solid #a9dfbf; }
+        .result-row.warning { background: #fef9e7; border: 1px solid #f9e79f; }
+        .result-row.danger  { background: #fde8e8; border: 1px solid #f5c6c6; }
+        .login-name { font-weight: 700; min-width: 160px; color: #2c3e50; }
+        .flash { padding: .6rem 1rem; border-radius: 5px; margin-bottom: 1rem; font-size: .9rem; }
+        .flash.info    { background: #ebf5fb; color: #1a5276; border: 1px solid #aed6f1; }
+        .flash.danger  { background: #fde8e8; color: #c0392b; border: 1px solid #f5c6c6; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; font-size: .9rem; }
+        .nav a { color: #2980b9; text-decoration: none; }
+        .nav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="nav">
+        <a href="{{ url_for('admin_dashboard') }}">← Painel Admin</a>
+        <a href="{{ url_for('logout') }}">Sair</a>
+    </div>
+
+    <h1>Importar Usuários em Lote</h1>
+    <p class="subtitle">
+        Cole os <strong>logins</strong> (um por linha) de usuários já cadastrados em
+        <code>pesquisadores.xlsx</code>. Cada usuário receberá o status
+        <em>"deve definir senha"</em> e poderá criar sua própria senha no primeiro acesso.
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="card">
+        <form method="POST">
+            <label for="logins">Lista de logins (um por linha)</label>
+            <textarea id="logins" name="logins" placeholder="wboeger&#10;mpvalim&#10;percequillo&#10;fmello" required></textarea>
+            <p class="hint">
+                Os logins devem corresponder exatamente à coluna <strong>login</strong> de
+                <code>pesquisadores.xlsx</code>. Usuários não encontrados na planilha serão ignorados.
+                Usuários já existentes no banco também serão ignorados.
+            </p>
+            <button type="submit">Importar usuários</button>
+        </form>
+    </div>
+
+    {% if results %}
+    <div class="card results">
+        <strong>Resultado da importação:</strong>
+        <div style="margin-top: 1rem;">
+        {% for login_name, status, msg in results %}
+            <div class="result-row {{ status }}">
+                <span class="login-name">{{ login_name }}</span>
+                <span>{{ msg }}</span>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+</body>
+</html>

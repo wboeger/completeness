@@ -17,7 +17,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+# SECRET_KEY must be stable across deployments so sessions survive restarts.
+# Set the SECRET_KEY environment variable in Railway; falls back to a fixed
+# dev key locally (not secure for production).
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
 
 # --- Configuration ---
 DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///users.db')
@@ -35,14 +38,18 @@ PLANILHA_EXTENDIDA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1zG0Ax_wK
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(256), nullable=True)   # NULL = must set password on first login
     is_admin = db.Column(db.Boolean, default=False)
+    must_set_password = db.Column(db.Boolean, default=False)   # True for bulk-imported users
     created_at = db.Column(db.DateTime, default=datetime.datetime.now)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        self.must_set_password = False
 
     def check_password(self, password):
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
 
 # --- Data Loading and Caching ---
@@ -119,6 +126,44 @@ def load_data_on_startup():
         print("Data loading successful.")
     else:
         print("Data loading FAILED — check Google Sheet URLs and local fallback files.")
+
+def run_db_migrations():
+    """Add new columns to existing tables without dropping data."""
+    from sqlalchemy import text
+    is_pg = 'postgresql' in str(db.engine.url)
+    with db.engine.connect() as conn:
+        if is_pg:
+            conn.execute(text(
+                'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS must_set_password BOOLEAN DEFAULT FALSE'
+            ))
+            # Allow NULL in password_hash for bulk-imported users
+            conn.execute(text(
+                'ALTER TABLE "user" ALTER COLUMN password_hash DROP NOT NULL'
+            ))
+        else:
+            # SQLite: ignore error if column already exists
+            try:
+                conn.execute(text(
+                    'ALTER TABLE user ADD COLUMN must_set_password BOOLEAN DEFAULT 0'
+                ))
+            except Exception:
+                pass
+        conn.commit()
+
+import re as _re
+
+def _load_session_taxa(user):
+    """Populate session['allowed_taxa'] from pesquisadores sheet for the given user."""
+    if PESQUISADORES_DF is not None and 'login' in PESQUISADORES_DF.columns:
+        row = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == user.username.lower()]
+        if not row.empty:
+            taxa_str = row.iloc[0]['táxons']
+            if isinstance(taxa_str, str):
+                session['allowed_taxa'] = sorted(
+                    t.strip().lower() for t in _re.split(r'[;,]', taxa_str) if t.strip()
+                )
+                return
+    session['allowed_taxa'] = []
 
 def generate_completeness_chart(dataframe, category_column, title_label, sort_cols, output_path):
     """
@@ -418,8 +463,14 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 with app.app_context():
     load_data_on_startup()
     db.create_all()
+    try:
+        run_db_migrations()
+    except Exception as _e:
+        print(f"Migration warning (non-fatal): {_e}")
     if User.query.filter_by(username='admin').first() is None:
-        db.session.add(User(username='admin', is_admin=True, password_hash=generate_password_hash('adminpass')))
+        admin = User(username='admin', is_admin=True)
+        admin.set_password('adminpass')
+        db.session.add(admin)
         db.session.commit()
         print("Default admin user 'admin' created.")
 
@@ -436,20 +487,48 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and user.check_password(request.form['password']):
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        user = User.query.filter_by(username=username).first()
+        if user is None:
+            flash('Credenciais inválidas.', 'danger')
+        elif user.must_set_password or not user.password_hash:
+            # First-time login: send to password setup
+            session['pending_user_id'] = user.id
+            return redirect(url_for('set_password'))
+        elif user.check_password(password):
             session['user_id'] = user.id
-            if PESQUISADORES_DF is not None:
-                user_data = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == user.username.lower()]
-                if not user_data.empty:
-                    taxa_str = user_data.iloc[0]['táxons']
-                    import re as _re
-                    session['allowed_taxa'] = sorted([t.strip().lower() for t in _re.split(r'[;,]', taxa_str)] if isinstance(taxa_str, str) else [])
-            flash('Logged in successfully!', 'success')
+            _load_session_taxa(user)
+            flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
-            flash('Invalid credentials', 'danger')
+            flash('Credenciais inválidas.', 'danger')
     return render_template('login.html')
+
+@app.route('/set_password', methods=['GET', 'POST'])
+def set_password():
+    if 'pending_user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['pending_user_id'])
+    if not user:
+        session.pop('pending_user_id', None)
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm', '')
+        if len(password) < 6:
+            flash('A senha deve ter pelo menos 6 caracteres.', 'danger')
+        elif password != confirm:
+            flash('As senhas não coincidem.', 'danger')
+        else:
+            user.set_password(password)
+            db.session.commit()
+            session.pop('pending_user_id', None)
+            session['user_id'] = user.id
+            _load_session_taxa(user)
+            flash('Senha definida com sucesso! Bem-vindo(a).', 'success')
+            return redirect(url_for('index'))
+    return render_template('set_password.html', username=user.username)
 
 @app.route('/logout')
 def logout():
@@ -530,6 +609,56 @@ def add_user():
     
     current_user = User.query.get(session['user_id'])
     return render_template('add_user.html', username=current_user.username, is_admin=current_user.is_admin)
+
+@app.route('/admin/bulk_add_users', methods=['GET', 'POST'])
+def bulk_add_users():
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado: somente administradores.', 'danger')
+        return redirect(url_for('index'))
+
+    results = []
+    if request.method == 'POST':
+        logins_text = request.form.get('logins', '')
+        logins = [l.strip() for l in logins_text.splitlines() if l.strip()]
+        created = skipped = not_found = errors = 0
+
+        for login_name in logins:
+            # Already exists?
+            if User.query.filter_by(username=login_name).first():
+                results.append((login_name, 'warning', 'Já existe — ignorado'))
+                skipped += 1
+                continue
+
+            # Verify in pesquisadores sheet
+            taxa_info = '(sem táxons na planilha)'
+            if PESQUISADORES_DF is not None and 'login' in PESQUISADORES_DF.columns:
+                row = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == login_name.lower()]
+                if row.empty:
+                    results.append((login_name, 'danger', 'Não encontrado em pesquisadores.xlsx — ignorado'))
+                    not_found += 1
+                    continue
+                taxa_val = row.iloc[0].get('táxons', '')
+                if isinstance(taxa_val, str) and taxa_val.strip():
+                    taxa_info = taxa_val.strip()
+
+            try:
+                new_user = User(username=login_name, must_set_password=True, is_admin=False)
+                db.session.add(new_user)
+                db.session.commit()
+                results.append((login_name, 'success', f'Criado — definirá senha no 1º acesso | Táxons: {taxa_info}'))
+                created += 1
+            except Exception as e:
+                db.session.rollback()
+                results.append((login_name, 'danger', f'Erro: {e}'))
+                errors += 1
+
+        flash(f'Concluído: {created} criados, {skipped} já existiam, {not_found} não encontrados, {errors} erros.', 'info')
+
+    current_user = User.query.get(session['user_id'])
+    return render_template('bulk_add_users.html',
+                           results=results,
+                           username=current_user.username,
+                           is_admin=True)
 
 if __name__ == '__main__':
     app.run(debug=True)
