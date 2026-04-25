@@ -117,6 +117,12 @@ def load_data_on_startup():
                     if child and parent and child != 'nan' and parent != 'nan':
                         if child not in TAXON_HIERARCHY:
                             TAXON_HIERARCHY[child] = parent
+            # Connect all phyla to 'animalia' so users responsible for
+            # Animalia get access to every taxon in the catalogue
+            if 'phylum' in PLANILHA_DF.columns:
+                for phylum in PLANILHA_DF['phylum'].dropna().str.strip().str.lower().unique():
+                    if phylum and phylum != 'nan' and phylum not in TAXON_HIERARCHY:
+                        TAXON_HIERARCHY[phylum] = 'animalia'
             print(f"Built taxon hierarchy with {len(TAXON_HIERARCHY)} relationships.")
         except Exception as e:
             print(f"ERROR building taxon hierarchy: {e}")
