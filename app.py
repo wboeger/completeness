@@ -527,13 +527,14 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             for col in context_cols:
                 agg_dict[col] = (col, most_common_val)
             agg_dict.update({
-                'n_species':     ('taxonrank', 'count'),   # taxonrank always filled → equiv. to R's n()
+                'n_spp_ctfb':    ('taxonrank', 'count'),   # species/subspecies units after subspecies rule
                 'mean_complete': ('completeness', 'mean'),
                 'min_complete':  ('completeness', 'min'),
                 'max_complete':  ('completeness', 'max'),
             })
             df = species_data.dropna(subset=[level]).groupby(level).agg(**agg_dict).reset_index()
             df['amplitude'] = df['max_complete'] - df['min_complete']
+            df.insert(0, 'taxon_analisado', taxon_filter)
             sort_cols = [c for c in context_cols + [level] if c in df.columns]
             return df.sort_values(sort_cols).round(2)
 
@@ -592,11 +593,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 
         # Column ordering aligned with R script output
         COL_ORDER = {
-            'family':   ['phylum', 'class', 'order', 'family',   'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'order':    ['phylum', 'class', 'order',             'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'class':    ['phylum', 'class',                      'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'subclass': ['phylum', 'class', 'subclass',          'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
-            'phylum':   ['phylum',                               'n_species', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'family':   ['taxon_analisado', 'phylum', 'class', 'order', 'family',   'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'order':    ['taxon_analisado', 'phylum', 'class', 'order',             'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'class':    ['taxon_analisado', 'phylum', 'class',                      'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'subclass': ['taxon_analisado', 'phylum', 'class', 'subclass',          'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
+            'phylum':   ['taxon_analisado', 'phylum',                               'n_spp_ctfb', 'mean_complete', 'min_complete', 'max_complete', 'amplitude', 'pesquisador', 'max_flag'],
         }
 
         def reorder(df, level, sort_cols):
@@ -614,6 +615,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         species_cols = ['taxonid', 'scientificname', 'phylum', 'class', 'subclass', 'order',
                         'family', 'taxonrank', 'completeness', 'filled_count', 'total_applicable']
         species_export = species_data[[c for c in species_cols if c in species_data.columns]].copy()
+        species_export.insert(0, 'taxon_analisado', taxon_filter)
         # Species: climb hierarchy from family upward until a responsible researcher is found
         species_export['pesquisador'] = species_export.apply(
             find_researcher, search_ranks=['family', 'order', 'class', 'phylum'], axis=1
