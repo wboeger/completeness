@@ -1,62 +1,176 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Taxon Analysis</title>
+    <title>Porcentômetro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9;
+               display: flex; justify-content: center; align-items: flex-start;
+               min-height: 100vh; margin: 0; padding: 2.5rem 1rem; box-sizing: border-box; }
+        .container { background: white; border-radius: 10px; box-shadow: 0 2px 12px rgba(0,0,0,.1);
+                     width: 100%; max-width: 640px; padding: 2rem 2.5rem; }
+        .header { display: flex; justify-content: space-between; align-items: center;
+                  border-bottom: 1px solid #eee; padding-bottom: .9rem; margin-bottom: 1.5rem; }
+        h1 { margin: 0; font-size: 1.6rem; color: #2c3e50; }
+        h2 { margin: 0; font-size: 1rem; font-weight: 400; color: #7f8c8d; }
+        .status-indicator { display: flex; align-items: center; gap: 7px; font-size: .85rem; color: #555; }
+        .status-light { width: 11px; height: 11px; border-radius: 50%; border: 1px solid rgba(0,0,0,.1); }
+        .status-ok    { background: #28a745; }
+        .status-error { background: #dc3545; }
+
+        /* ── analysis type cards ── */
+        .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; margin-bottom: 1.4rem; }
+        .type-card { border: 2px solid #dce1e7; border-radius: 8px; padding: 1rem 1.1rem;
+                     cursor: pointer; transition: border-color .15s, background .15s; position: relative; }
+        .type-card input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
+        .type-card.selected { border-color: #2980b9; background: #eaf4fd; }
+        .type-card .card-icon { font-size: 1.5rem; margin-bottom: .3rem; }
+        .type-card .card-title { font-weight: 700; font-size: .97rem; color: #2c3e50; margin-bottom: .25rem; }
+        .type-card .card-desc  { font-size: .78rem; color: #7f8c8d; line-height: 1.35; }
+        .type-card.selected .card-title { color: #1a5276; }
+
+        /* ── taxon input ── */
+        label.field-label { display: block; font-weight: 600; color: #34495e;
+                             margin-bottom: .4rem; font-size: .95rem; }
+        input[type=text] { width: 100%; padding: .65rem .9rem; border: 1px solid #ccc;
+                           border-radius: 6px; font-size: 1rem; box-sizing: border-box;
+                           margin-bottom: .7rem; }
+        input[type=text]:focus { outline: none; border-color: #3498db;
+                                  box-shadow: 0 0 0 2px rgba(52,152,219,.2); }
+        button[type=submit] { width: 100%; padding: .75rem; background: #2980b9; color: white;
+                              border: none; border-radius: 6px; font-size: 1rem; font-weight: 700;
+                              cursor: pointer; margin-top: .2rem; transition: background .15s; }
+        button[type=submit]:hover { background: #2471a3; }
+
+        /* ── authorized taxa chips ── */
+        .taxa-section { margin-top: 1.2rem; padding: 1rem 1.1rem;
+                        background: #e9f7fd; border-left: 4px solid #3498db; border-radius: 4px; }
+        .taxa-section h4 { margin: 0 0 .5rem; font-size: .9rem; color: #1a5276; }
+        .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+        .chip { background: white; border: 1px solid #aed6f1; border-radius: 20px;
+                padding: .2rem .7rem; font-size: .8rem; color: #1a5276;
+                cursor: pointer; transition: background .1s; }
+        .chip:hover { background: #d6eaf8; }
+
+        /* ── footer ── */
+        .footer-links { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #eee;
+                        display: flex; gap: 1.2rem; font-size: .88rem; }
+        .footer-links a { color: #2980b9; text-decoration: none; }
+        .footer-links a:hover { text-decoration: underline; }
+
+        .flashes { list-style: none; padding: 0; margin-bottom: 1rem; }
+        .flashes li { padding: .6rem .9rem; margin-bottom: .5rem; border-radius: 5px; font-size: .9rem; }
+        .flashes .success { background: #d4edda; color: #155724; }
+        .flashes .danger  { background: #f8d7da; color: #721c24; }
+        .flashes .info    { background: #d1ecf1; color: #0c5460; }
+        .flashes .warning { background: #fff3cd; color: #856404; }
+
+        .gbif-note { font-size: .78rem; color: #95a5a6; margin-top: .5rem; display: none; line-height: 1.4; }
+        .gbif-note.visible { display: block; }
+    </style>
 </head>
 <body>
-    <h1>Porcentômetro</h1>
-    <div class="container">
-        <div class="header">
-            <h2>Welcome, {{ username }}!</h2>
-            <div class="status-indicator">
-                <span>Data Status:</span>
-                {% if data_loaded %}
-                    <span class="status-light status-ok" title="Data files loaded successfully."></span>
-                {% else %}
-                    <span class="status-light status-error" title="Error loading data files on startup."></span>
-                {% endif %}
-            </div>
+<div class="container">
+    <div class="header">
+        <div>
+            <h1>Porcentômetro</h1>
+            <h2>Bem-vindo(a), {{ username }}</h2>
+        </div>
+        <div class="status-indicator">
+            <span>Dados:</span>
+            {% if data_loaded %}
+                <span class="status-light status-ok" title="Dados carregados com sucesso."></span>
+            {% else %}
+                <span class="status-light status-error" title="Erro ao carregar dados."></span>
+            {% endif %}
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <ul class="flashes">
+            {% for category, message in messages %}
+                <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST" id="mainForm" action="{{ url_for('analyze_taxon') }}">
+        <!-- Analysis type selection -->
+        <div class="type-grid">
+            <label class="type-card selected" id="card-data">
+                <input type="radio" name="analysis_type" value="data" checked
+                       onchange="selectType('data')">
+                <div class="card-icon">📊</div>
+                <div class="card-title">Completude dos dados</div>
+                <div class="card-desc">
+                    Avalia o preenchimento dos campos obrigatórios para as espécies já
+                    cadastradas no CTFB.
+                </div>
+            </label>
+            <label class="type-card" id="card-gbif">
+                <input type="radio" name="analysis_type" value="gbif"
+                       onchange="selectType('gbif')">
+                <div class="card-icon">🌍</div>
+                <div class="card-title">Completude da lista (GBIF)</div>
+                <div class="card-desc">
+                    Compara as espécies do CTFB com as registradas no Brasil pelo GBIF
+                    e identifica espécies ausentes no catálogo.
+                </div>
+            </label>
         </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                <ul class="flashes">
-                {% for category, message in messages %}
-                    <li class="{{ category }}">{{ message }}</li>
-                {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
+        <p class="gbif-note" id="gbifNote">
+            A análise consulta a API do GBIF em tempo real. Para grupos grandes pode
+            levar vários minutos. A página atualizará automaticamente com o progresso.
+        </p>
 
-        <h3>Run Taxon Analysis</h3>
-        <form method="POST" action="{{ url_for('analyze_taxon') }}">
-            <label for="taxon">Enter Taxon Name:</label>
-            <input type="text" id="taxon" name="taxon" required>
-            <button type="submit">Analyze</button>
-        </form>
+        <label class="field-label" for="taxon">Táxon</label>
+        <input type="text" id="taxon" name="taxon"
+               placeholder="ex: Nematomorpha, Coleoptera, Araneae…" required autofocus>
 
         {% if allowed_taxa_list %}
-        <div class="taxa-info">
-            <h4>Your Authorized Taxa:</h4>
-            <p>You can analyze these taxa or any subordinate group.</p>
-            <ul>
+        <div class="taxa-section">
+            <h4>Seus táxons autorizados — clique para preencher:</h4>
+            <div class="chips">
                 {% for taxon in allowed_taxa_list %}
-                    <li>{{ taxon|title }}</li>
+                <span class="chip"
+                      onclick="document.getElementById('taxon').value='{{ taxon|title }}'">
+                    {{ taxon|title }}
+                </span>
                 {% endfor %}
-            </ul>
+            </div>
         </div>
         {% endif %}
 
-        <div class="footer-links">
-            <a href="{{ url_for('gbif_gap') }}">Lacunas GBIF</a>
-            {% if is_admin %}
-                <a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>
-            {% endif %}
-            <a href="{{ url_for('logout') }}">Logout</a>
-        </div>
+        <button type="submit" id="submitBtn">Analisar</button>
+    </form>
+
+    <div class="footer-links">
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+        {% endif %}
+        <a href="{{ url_for('logout') }}">Sair</a>
     </div>
+</div>
+
+<script>
+const ACTIONS = {
+    data: "{{ url_for('analyze_taxon') }}",
+    gbif: "{{ url_for('gbif_gap') }}"
+};
+
+function selectType(type) {
+    document.getElementById('card-data').classList.toggle('selected', type === 'data');
+    document.getElementById('card-gbif').classList.toggle('selected', type === 'gbif');
+    document.getElementById('mainForm').action = ACTIONS[type];
+    document.getElementById('gbifNote').classList.toggle('visible', type === 'gbif');
+    document.getElementById('submitBtn').textContent =
+        type === 'gbif' ? 'Iniciar análise GBIF' : 'Analisar';
+}
+</script>
 </body>
 </html>
