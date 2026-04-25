@@ -521,7 +521,6 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             env_lower = species_data['environment'].fillna('').str.lower().str.strip()
 
         is_epicontinental = env_lower == "epicontinental"
-        is_marine         = env_lower == "marinho"
 
         lifeform_lower = pd.Series('', index=species_data.index)
         if 'lifeform' in species_data.columns:
@@ -535,16 +534,10 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         filled_count = filled_matrix.sum(axis=1).copy().astype(float)
         species_data['total_applicable'] = float(len(manual_present))
 
-        # Rule 1a: environment = "epicontinental" → exclude marinedomain
-        # Rule 1b: environment = "marinho"        → exclude epicontinentaldomain
-        domain_exclusions = [
-            ('marinedomain',        is_epicontinental),
-            ('epicontinentaldomain', is_marine),
-        ]
-        for col, mask in domain_exclusions:
-            if col in manual_present:
-                filled_count -= (mask & filled_matrix[col]).astype(float)
-                species_data.loc[mask, 'total_applicable'] -= 1.0
+        # environment = "epicontinental" → exclude marinedomain
+        if 'marinedomain' in manual_present:
+            filled_count -= (is_epicontinental & filled_matrix['marinedomain']).astype(float)
+            species_data.loc[is_epicontinental, 'total_applicable'] -= 1.0
 
         # Rule 2: host columns — parasites/epibiontes get 1 combined slot (OR); everyone else gets 0
         animal_in = 'animalhostnames' in manual_present
