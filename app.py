@@ -246,21 +246,18 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
                 rr = requests.get(f'https://api.gbif.org/v1/species/{key}', timeout=30)
                 if rr.ok:
                     sp = rr.json()
-                    # Skip fossil / extinct taxa
-                    if sp.get('extinct') is True:
-                        with lock:
-                            counter[0] += 1
-                        return
-                    name = sp.get('canonicalName', '')
-                    if name and len(name.split()) >= 2:
-                        resolved[idx] = {
-                            'species_key':  key,
-                            'canonical_name': name,
-                            'gbif_family':  sp.get('family', ''),
-                            'gbif_order':   sp.get('order', ''),
-                            'gbif_class':   sp.get('class', ''),
-                            'gbif_phylum':  sp.get('phylum', ''),
-                        }
+                    # Skip fossil / extinct taxa (do not return early — counter must increment below)
+                    if sp.get('extinct') is not True:
+                        name = sp.get('canonicalName', '')
+                        if name and len(name.split()) >= 2:
+                            resolved[idx] = {
+                                'species_key':   key,
+                                'canonical_name': name,
+                                'gbif_family':   sp.get('family', ''),
+                                'gbif_order':    sp.get('order', ''),
+                                'gbif_class':    sp.get('class', ''),
+                                'gbif_phylum':   sp.get('phylum', ''),
+                            }
             except Exception:
                 pass
             with lock:
