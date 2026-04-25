@@ -134,27 +134,34 @@ def load_data_on_startup():
         print("Data loading FAILED — check Google Sheet URLs and local fallback files.")
 
 def run_db_migrations():
-    """Add new columns to existing tables without dropping data."""
+    """Add new columns to existing tables without dropping data.
+    Each statement runs in its own connection+transaction so one failure
+    does not roll back the others."""
     from sqlalchemy import text
     is_pg = 'postgresql' in str(db.engine.url)
-    with db.engine.connect() as conn:
-        if is_pg:
-            conn.execute(text(
-                'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS must_set_password BOOLEAN DEFAULT FALSE'
-            ))
-            # Allow NULL in password_hash for bulk-imported users
-            conn.execute(text(
-                'ALTER TABLE "user" ALTER COLUMN password_hash DROP NOT NULL'
-            ))
-        else:
-            # SQLite: ignore error if column already exists
-            try:
-                conn.execute(text(
-                    'ALTER TABLE user ADD COLUMN must_set_password BOOLEAN DEFAULT 0'
-                ))
-            except Exception:
-                pass
-        conn.commit()
+
+    migrations = []
+    if is_pg:
+        migrations = [
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS must_set_password BOOLEAN DEFAULT FALSE',
+            'ALTER TABLE "user" ADD COLUMN IF NOT EXISTS created_at TIMESTAMP',
+            # Make password_hash nullable (idempotent — no-op if already nullable)
+            'ALTER TABLE "user" ALTER COLUMN password_hash DROP NOT NULL',
+        ]
+    else:
+        migrations = [
+            'ALTER TABLE "user" ADD COLUMN must_set_password BOOLEAN DEFAULT 0',
+            'ALTER TABLE "user" ADD COLUMN created_at DATETIME',
+        ]
+
+    for stmt in migrations:
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text(stmt))
+                conn.commit()
+        except Exception as _e:
+            # Column already exists or other benign error — log and continue
+            print(f"  Migration skipped ({_e})")
 
 import re as _re
 
@@ -470,13 +477,19 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         return None
 
 # --- Flask Routes ---
+_USING_POSTGRES = 'postgresql' in DATABASE_URL
+
 with app.app_context():
     load_data_on_startup()
+    if _USING_POSTGRES:
+        print(f"[DB] Connected to PostgreSQL — data will persist across deployments.")
+    else:
+        print(f"[DB] WARNING: Using SQLite ({DATABASE_URL}) — data WILL be lost on redeploy! "
+              "Set DATABASE_URL in Railway environment variables.")
     db.create_all()
-    try:
-        run_db_migrations()
-    except Exception as _e:
-        print(f"Migration warning (non-fatal): {_e}")
+    print("[DB] Tables created/verified.")
+    run_db_migrations()
+    print("[DB] Migrations complete.")
     if User.query.filter_by(username='admin').first() is None:
         admin = User(username='admin', is_admin=True)
         admin.set_password('adminpass')
@@ -588,7 +601,28 @@ def admin_dashboard():
         flash('Access denied: Administrators only.', 'danger')
         return redirect(url_for('index'))
     users = User.query.all()
-    return render_template('admin.html', users=users, username=User.query.get(session['user_id']).username, is_admin=True)
+    return render_template('admin.html', users=users,
+                           username=User.query.get(session['user_id']).username,
+                           is_admin=True, using_postgres=_USING_POSTGRES)
+
+@app.route('/admin/export_users')
+def export_users():
+    """Download a CSV of all users so admins can restore after a SQLite wipe."""
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    import csv, io
+    users = User.query.all()
+    out = io.StringIO()
+    w = csv.writer(out)
+    w.writerow(['username', 'is_admin', 'must_set_password', 'password_hash', 'created_at'])
+    for u in users:
+        w.writerow([u.username, int(u.is_admin), int(u.must_set_password or 0),
+                    u.password_hash or '', u.created_at or ''])
+    out.seek(0)
+    from flask import Response
+    return Response(out.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=users_backup.csv'})
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 def add_user():
@@ -619,6 +653,47 @@ def add_user():
     
     current_user = User.query.get(session['user_id'])
     return render_template('add_user.html', username=current_user.username, is_admin=current_user.is_admin)
+
+@app.route('/admin/import_users_csv', methods=['GET', 'POST'])
+def import_users_csv():
+    """Restore users from a CSV previously exported by /admin/export_users."""
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        import csv, io
+        file = request.files.get('csv_file')
+        if not file:
+            flash('Nenhum arquivo enviado.', 'danger')
+            return redirect(url_for('import_users_csv'))
+        content = file.read().decode('utf-8')
+        reader = csv.DictReader(io.StringIO(content))
+        created = skipped = errors = 0
+        for row in reader:
+            username = row.get('username', '').strip()
+            if not username:
+                continue
+            if User.query.filter_by(username=username).first():
+                skipped += 1
+                continue
+            try:
+                u = User(
+                    username=username,
+                    is_admin=bool(int(row.get('is_admin', 0))),
+                    must_set_password=bool(int(row.get('must_set_password', 0))),
+                    password_hash=row.get('password_hash') or None,
+                )
+                db.session.add(u)
+                db.session.commit()
+                created += 1
+            except Exception as e:
+                db.session.rollback()
+                errors += 1
+                print(f"CSV import error for {username}: {e}")
+        flash(f'Importação CSV: {created} criados, {skipped} já existiam, {errors} erros.', 'info')
+        return redirect(url_for('admin_dashboard'))
+    current_user = User.query.get(session['user_id'])
+    return render_template('import_users_csv.html', username=current_user.username, is_admin=True)
 
 @app.route('/admin/bulk_add_users', methods=['GET', 'POST'])
 def bulk_add_users():

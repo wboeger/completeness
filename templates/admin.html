@@ -5,10 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .alert-sqlite {
+            background: #fff3cd; color: #856404; border: 1px solid #ffc107;
+            border-radius: 6px; padding: .8rem 1.2rem; margin-bottom: 1.2rem;
+            font-size: .92rem;
+        }
+        .alert-sqlite strong { color: #6d4a00; }
+        .alert-pg {
+            background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
+            border-radius: 6px; padding: .8rem 1.2rem; margin-bottom: 1.2rem;
+            font-size: .92rem;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <h2>Admin Dashboard</h2>
+
+        {% if not using_postgres %}
+        <div class="alert-sqlite">
+            <strong>⚠ Atenção: banco de dados SQLite detectado.</strong>
+            Os dados de usuários <strong>serão perdidos</strong> a cada redeploy.
+            Configure a variável de ambiente <code>DATABASE_URL</code> no Railway apontando
+            para um banco PostgreSQL para persistência permanente.
+            Enquanto isso, use o botão <strong>Exportar CSV</strong> abaixo para fazer backup
+            antes de cada atualização.
+        </div>
+        {% else %}
+        <div class="alert-pg">
+            Banco de dados: <strong>PostgreSQL</strong> — dados persistem entre deployments.
+        </div>
+        {% endif %}
+
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 <ul class="flashes">
@@ -40,10 +69,15 @@
                 {% endfor %}
             </tbody>
         </table>
+
         <p>
             <a href="{{ url_for('bulk_add_users') }}"><strong>Importar usuários em lote</strong></a>
             &nbsp;|&nbsp;
             <a href="{{ url_for('add_user') }}">Adicionar usuário individual</a>
+            &nbsp;|&nbsp;
+            <a href="{{ url_for('export_users') }}">Exportar CSV (backup)</a>
+            &nbsp;|&nbsp;
+            <a href="{{ url_for('import_users_csv') }}">Restaurar CSV</a>
         </p>
         <p><a href="{{ url_for('index') }}">← Página principal</a> &nbsp;|&nbsp; <a href="{{ url_for('logout') }}">Sair</a></p>
     </div>
