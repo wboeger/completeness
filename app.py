@@ -501,6 +501,10 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         if species_data.empty:
             return None
 
+        # Deduplicate: keep only the first row per taxonid
+        if 'taxonid' in species_data.columns:
+            species_data = species_data.drop_duplicates(subset='taxonid', keep='first')
+
         # --- 15 manual fields (regras.txt Section 3) ---
         MANUAL_COLS = [
             "bibliographicreference", "country", "establishmentmeans", "endemicbrazil",
