@@ -209,17 +209,31 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
         update(f'Táxon encontrado: {match.get("canonicalName", taxon_name)} ({gbif_rank}, key={taxon_key})', 5)
 
         # ── Phase 2: collect speciesKey values via occurrence facets ──
+        # basisOfRecord filter excludes FOSSIL_SPECIMEN at source so that species
+        # with only fossil occurrences in Brazil never enter the key list.
         update('Coletando chaves de espécies via GBIF Occurrence Search (Brasil)…', 8)
         FACET_LIMIT = 50000
+        NON_FOSSIL_BASIS = [
+            'HUMAN_OBSERVATION', 'PRESERVED_SPECIMEN', 'LIVING_SPECIMEN',
+            'MACHINE_OBSERVATION', 'MATERIAL_SAMPLE', 'OBSERVATION',
+            'LITERATURE', 'OCCURRENCE',
+        ]
         species_keys = []
         offset = 0
         while True:
+            # Build params as list of tuples so multiple basisOfRecord values
+            # are sent as repeated query parameters (requests requirement).
+            params = [
+                ('country',     'BR'),
+                ('taxonKey',    taxon_key),
+                ('facet',       'speciesKey'),
+                ('facetLimit',  FACET_LIMIT),
+                ('facetOffset', offset),
+                ('limit',       0),
+            ] + [('basisOfRecord', b) for b in NON_FOSSIL_BASIS]
             r = requests.get(
                 'https://api.gbif.org/v1/occurrence/search',
-                params={'country': 'BR', 'taxonKey': taxon_key,
-                        'facet': 'speciesKey', 'facetLimit': FACET_LIMIT,
-                        'facetOffset': offset, 'limit': 0},
-                timeout=60
+                params=params, timeout=60
             )
             r.raise_for_status()
             data = r.json()
