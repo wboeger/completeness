@@ -13,13 +13,11 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     HRFlowable, PageBreak, KeepTogether
 )
-from reportlab.platypus.tableofcontents import TableOfContents
 
 W, H = A4
 MARGIN = 2.2 * cm
 APP_URL = 'https://comfortable-emotion-production-e366.up.railway.app/'
 
-# ── colour palette ─────────────────────────────────────────────────────────────
 BLUE_DARK  = colors.HexColor('#1a3a5c')
 BLUE_MID   = colors.HexColor('#2980b9')
 BLUE_LIGHT = colors.HexColor('#eaf4fd')
@@ -29,58 +27,45 @@ GREEN      = colors.HexColor('#27ae60')
 ORANGE     = colors.HexColor('#e67e22')
 RED        = colors.HexColor('#c0392b')
 
-# ── style factory ──────────────────────────────────────────────────────────────
 def make_styles():
-    base = getSampleStyleSheet()
     S = {}
     S['title'] = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=26,
-                                 textColor=BLUE_DARK, leading=32, spaceAfter=6,
-                                 alignment=TA_CENTER)
+                                 textColor=BLUE_DARK, leading=32, spaceAfter=6, alignment=TA_CENTER)
     S['subtitle'] = ParagraphStyle('subtitle', fontName='Helvetica', fontSize=13,
-                                    textColor=GREY_MID, leading=18, spaceAfter=4,
-                                    alignment=TA_CENTER)
+                                    textColor=GREY_MID, leading=18, spaceAfter=4, alignment=TA_CENTER)
     S['version'] = ParagraphStyle('version', fontName='Helvetica', fontSize=10,
-                                   textColor=GREY_MID, leading=14, spaceAfter=2,
-                                   alignment=TA_CENTER)
+                                   textColor=GREY_MID, leading=14, spaceAfter=2, alignment=TA_CENTER)
     S['h1'] = ParagraphStyle('h1', fontName='Helvetica-Bold', fontSize=16,
-                              textColor=BLUE_DARK, leading=22, spaceBefore=18, spaceAfter=6,
-                              borderPad=4)
+                              textColor=BLUE_DARK, leading=22, spaceBefore=18, spaceAfter=6)
     S['h2'] = ParagraphStyle('h2', fontName='Helvetica-Bold', fontSize=13,
                               textColor=BLUE_MID, leading=18, spaceBefore=14, spaceAfter=4)
     S['h3'] = ParagraphStyle('h3', fontName='Helvetica-Bold', fontSize=11,
                               textColor=BLUE_DARK, leading=16, spaceBefore=10, spaceAfter=3)
     S['body'] = ParagraphStyle('body', fontName='Helvetica', fontSize=10,
-                                textColor=colors.black, leading=15, spaceAfter=6,
-                                alignment=TA_JUSTIFY)
+                                textColor=colors.black, leading=15, spaceAfter=6, alignment=TA_JUSTIFY)
     S['bullet'] = ParagraphStyle('bullet', fontName='Helvetica', fontSize=10,
                                   textColor=colors.black, leading=14, spaceAfter=3,
                                   leftIndent=14, firstLineIndent=-10)
     S['code'] = ParagraphStyle('code', fontName='Courier', fontSize=8.5,
                                 textColor=colors.HexColor('#2c3e50'), leading=13,
-                                spaceAfter=3, leftIndent=12,
-                                backColor=GREY_LIGHT, borderPad=4)
+                                spaceAfter=3, leftIndent=12, backColor=GREY_LIGHT, borderPad=4)
     S['note'] = ParagraphStyle('note', fontName='Helvetica-Oblique', fontSize=9.5,
                                 textColor=colors.HexColor('#6d4a00'), leading=14,
                                 spaceAfter=4, leftIndent=8)
-    S['toc'] = ParagraphStyle('toc', fontName='Helvetica', fontSize=10,
-                               textColor=BLUE_DARK, leading=16, spaceAfter=2)
     S['footer'] = ParagraphStyle('footer', fontName='Helvetica', fontSize=8,
                                   textColor=GREY_MID, alignment=TA_CENTER)
     S['url_label'] = ParagraphStyle('url_label', fontName='Helvetica-Bold', fontSize=9,
                                      textColor=colors.HexColor('#1a5276'),
                                      leading=13, spaceAfter=2, alignment=TA_CENTER)
     S['url_link'] = ParagraphStyle('url_link', fontName='Courier-Bold', fontSize=12,
-                                    textColor=BLUE_MID, leading=18, spaceAfter=0,
-                                    alignment=TA_CENTER)
+                                    textColor=BLUE_MID, leading=18, spaceAfter=0, alignment=TA_CENTER)
     return S
 
 
 def url_box(label, S):
-    """Highlighted box with the application URL."""
     inner = Table(
         [[Paragraph(label, S['url_label'])],
-         [Paragraph(f'<link href="{APP_URL}" color="#2980b9">{APP_URL}</link>',
-                    S['url_link'])]],
+         [Paragraph(f'<link href="{APP_URL}" color="#2980b9">{APP_URL}</link>', S['url_link'])]],
         colWidths=[W - 2 * MARGIN - 1.6 * cm]
     )
     inner.setStyle(TableStyle([
@@ -94,7 +79,6 @@ def url_box(label, S):
     outer.setStyle(TableStyle([
         ('BACKGROUND',    (0, 0), (-1, -1), BLUE_LIGHT),
         ('BOX',           (0, 0), (-1, -1), 1.5, BLUE_MID),
-        ('ROUNDEDCORNERS', [6]),
         ('TOPPADDING',    (0, 0), (-1, -1), 2),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
         ('LEFTPADDING',   (0, 0), (-1, -1), 0),
@@ -106,49 +90,85 @@ def url_box(label, S):
 def rule():
     return HRFlowable(width='100%', thickness=1, color=BLUE_MID, spaceAfter=6, spaceBefore=2)
 
-
 def section_rule():
     return HRFlowable(width='100%', thickness=0.5, color=colors.HexColor('#dce1e7'),
                       spaceAfter=4, spaceBefore=2)
 
+def _grid_style(header_color):
+    return TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, 0), header_color),
+        ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
+        ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE',      (0, 0), (-1, 0), 9),
+        ('ROWBACKGROUNDS',(0, 1), (-1,-1), [colors.white, GREY_LIGHT]),
+        ('GRID',          (0, 0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
+        ('VALIGN',        (0, 0), (-1,-1), 'TOP'),
+        ('TOPPADDING',    (0, 0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1,-1), 4),
+        ('LEFTPADDING',   (0, 0), (-1,-1), 6),
+    ])
 
 def field_table(rows, S):
-    """Render a two-column (Field | Description) table."""
     header = [Paragraph('<b>Field</b>', S['body']), Paragraph('<b>Description</b>', S['body'])]
     data = [header] + [[Paragraph(f'<font name="Courier" size="8.5">{r[0]}</font>', S['body']),
                          Paragraph(r[1], S['body'])] for r in rows]
     t = Table(data, colWidths=[4.5*cm, 11.5*cm])
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), BLUE_DARK),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE',   (0,0), (-1,0), 9),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID',    (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN',  (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
+    t.setStyle(_grid_style(BLUE_DARK))
     return t
 
+def field_table_pt(rows, S):
+    header = [Paragraph('<b>Campo</b>', S['body']), Paragraph('<b>Descrição</b>', S['body'])]
+    data = [header] + [[Paragraph(f'<font name="Courier" size="8.5">{r[0]}</font>', S['body']),
+                         Paragraph(r[1], S['body'])] for r in rows]
+    t = Table(data, colWidths=[4.5*cm, 11.5*cm])
+    t.setStyle(_grid_style(BLUE_DARK))
+    return t
 
 def output_table(rows, S, col1='Sheet / File', col2='Contents'):
     header = [Paragraph(f'<b>{col1}</b>', S['body']), Paragraph(f'<b>{col2}</b>', S['body'])]
     data = [header] + [[Paragraph(f'<font name="Courier" size="8.5">{r[0]}</font>', S['body']),
                          Paragraph(r[1], S['body'])] for r in rows]
     t = Table(data, colWidths=[5*cm, 11*cm])
+    t.setStyle(_grid_style(GREEN))
+    return t
+
+def steps_table(rows, S):
+    t = Table(rows, colWidths=[1*cm, W - 2*MARGIN - 1.4*cm])
     t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), GREEN),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID',    (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN',  (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
+        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING',    (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING',   (0, 0), (0, -1),  0),
+        ('LEFTPADDING',   (1, 0), (1, -1),  8),
+        ('ROWBACKGROUNDS',(0, 0), (-1, -1), [colors.white, GREY_LIGHT]),
+        ('BOX',           (0, 0), (-1, -1), 0.4, colors.HexColor('#dce1e7')),
+        ('GRID',          (0, 0), (-1, -1), 0.4, colors.HexColor('#dce1e7')),
     ]))
+    return t
+
+def excl_table(rows, S):
+    t = Table(rows, colWidths=[4.5*cm, 4.5*cm, 7*cm])
+    t.setStyle(_grid_style(ORANGE))
+    return t
+
+def time_table(rows, S):
+    t = Table(rows, colWidths=[5.5*cm, 4.5*cm, 6*cm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND',    (0, 0), (-1, 0), BLUE_MID),
+        ('TEXTCOLOR',     (0, 0), (-1, 0), colors.white),
+        ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('ROWBACKGROUNDS',(0, 1), (-1,-1), [colors.white, GREY_LIGHT]),
+        ('GRID',          (0, 0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
+        ('VALIGN',        (0, 0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING',    (0, 0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1,-1), 5),
+        ('LEFTPADDING',   (0, 0), (-1,-1), 6),
+    ]))
+    return t
+
+def db_table(rows, S):
+    t = Table(rows, colWidths=[3*cm, 4*cm, 9*cm])
+    t.setStyle(_grid_style(BLUE_DARK))
     return t
 
 
@@ -162,39 +182,32 @@ def build_english(path):
                             topMargin=MARGIN, bottomMargin=MARGIN,
                             title='Porcentômetro — User Manual',
                             author='CTFB / Taxon Analysis App')
-
     story = []
 
-    # ── Cover ──────────────────────────────────────────────────────────────────
+    # Cover
     story += [
         Spacer(1, 2*cm),
         Paragraph('Porcentômetro', S['title']),
         Paragraph('Completeness Assessment System', S['subtitle']),
         Paragraph('Catálogo Taxonômico da Fauna do Brasil (CTFB)', S['subtitle']),
-        Spacer(1, 0.4*cm),
-        rule(),
-        Spacer(1, 0.3*cm),
+        Spacer(1, 0.4*cm), rule(), Spacer(1, 0.3*cm),
         Paragraph('User Manual — English', S['version']),
-        Paragraph('Version 2.0 · April 2026', S['version']),
+        Paragraph('Version 2.1 · April 2026', S['version']),
         Spacer(1, 1.2*cm),
         url_box('Access the application at:', S),
         Spacer(1, 2*cm),
+        Paragraph(
+            'The <b>Porcentômetro</b> is a web tool developed for the '
+            '<i>Catálogo Taxonômico da Fauna do Brasil</i> (CTFB). It provides two '
+            'complementary analyses: (1) <b>Data Completeness</b> — how thoroughly '
+            'mandatory fields are filled in for catalogued species; and (2) '
+            '<b>Species-List Completeness</b> — a comparison of CTFB records against '
+            'the Global Biodiversity Information Facility (GBIF) to identify species '
+            'known from Brazil that are absent from the catalogue.', S['body']),
+        PageBreak(),
     ]
 
-    intro_text = (
-        'The <b>Porcentômetro</b> is a web-based tool developed for the '
-        '<i>Catálogo Taxonômico da Fauna do Brasil</i> (CTFB). It provides two '
-        'complementary analyses: (1) the <b>Data Completeness</b> analysis, which '
-        'measures how thoroughly the mandatory fields are filled in for species '
-        'already catalogued, and (2) the <b>Species-List Completeness</b> analysis, '
-        'which compares CTFB records against the Global Biodiversity Information '
-        'Facility (GBIF) to identify species known from Brazil that are absent '
-        'from the catalogue.'
-    )
-    story.append(Paragraph(intro_text, S['body']))
-    story.append(PageBreak())
-
-    # ── 1. Accessing the System ────────────────────────────────────────────────
+    # 1. Accessing
     story += [Paragraph('1. Accessing the System', S['h1']), rule()]
     story.append(url_box('Open the application in any modern browser:', S))
     story.append(Spacer(1, 0.5*cm))
@@ -214,86 +227,69 @@ def build_english(path):
     story += [Paragraph('1.2  First Access — Setting Your Password', S['h2'])]
     story.append(Paragraph(
         'Users added by an administrator via the bulk-import tool do <b>not</b> '
-        'have a password assigned yet. On first login, the system detects this '
-        'and redirects you to a password-creation screen before granting access. '
-        'Follow the steps below:', S['body']))
-
-    steps_en = [
+        'have a password assigned yet. On first login the system detects this and '
+        'redirects you to a password-creation screen. Follow the steps below:',
+        S['body']))
+    story.append(steps_table([
         [Paragraph('<b>1</b>', S['body']),
-         Paragraph('Open the application URL and type your username in the login form. '
-                   'Leave the password field <b>empty</b> and click <i>Login</i> '
-                   '(or enter any value — it will be ignored at this stage).', S['body'])],
+         Paragraph('Open the URL and type your username. Leave the password field '
+                   '<b>empty</b> and click <i>Login</i> (any value is ignored at this stage).',
+                   S['body'])],
         [Paragraph('<b>2</b>', S['body']),
-         Paragraph('The system recognises that no password has been set and '
-                   'automatically redirects you to the <b>Set Password</b> screen, '
-                   'which displays a welcome message with your username.', S['body'])],
+         Paragraph('The system redirects you to the <b>Set Password</b> screen with a '
+                   'welcome message.', S['body'])],
         [Paragraph('<b>3</b>', S['body']),
-         Paragraph('Enter a new password of <b>at least 6 characters</b> in the '
-                   '"New password" field, then retype it in the "Confirm password" '
-                   'field and click <i>Set password and continue</i>.', S['body'])],
+         Paragraph('Enter a new password of <b>at least 6 characters</b>, retype it, '
+                   'then click <i>Set password and continue</i>.', S['body'])],
         [Paragraph('<b>4</b>', S['body']),
-         Paragraph('If the two entries match and meet the minimum length, your '
-                   'password is saved and you are immediately logged in and taken '
-                   'to the main analysis page.', S['body'])],
+         Paragraph('If the entries match and are long enough, you are immediately logged '
+                   'in and taken to the main page.', S['body'])],
         [Paragraph('<b>5</b>', S['body']),
-         Paragraph('From this point on, use your username and the password you just '
-                   'created on every subsequent login.', S['body'])],
-    ]
-    steps_t = Table(steps_en, colWidths=[1*cm, W - 2*MARGIN - 1.4*cm])
-    steps_t.setStyle(TableStyle([
-        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING',    (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING',   (0, 0), (0, -1), 0),
-        ('LEFTPADDING',   (1, 0), (1, -1), 8),
-        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.white, GREY_LIGHT]),
-        ('BOX',           (0, 0), (-1, -1), 0.4, colors.HexColor('#dce1e7')),
-        ('GRID',          (0, 0), (-1, -1), 0.4, colors.HexColor('#dce1e7')),
-    ]))
-    story.append(steps_t)
+         Paragraph('From this point on, use your username and the new password for every '
+                   'subsequent login.', S['body'])],
+    ], S))
     story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
         'If the passwords do not match or are shorter than 6 characters, an error '
-        'message is displayed on the same screen and you are asked to try again. '
-        'No data is lost in this case.', S['note']))
+        'is shown on the same screen and you may try again. No data is lost.',
+        S['note']))
 
     story += [Paragraph('1.3  Forgotten Password', S['h2'])]
     story.append(Paragraph(
-        'If you forget your password, you cannot reset it yourself. There are two '
-        'ways to recover access:', S['body']))
-    for bullet in [
-        '<b>Contact your administrator</b> — the administrator can click '
-        '<i>Reset password</i> next to your account in the Admin Dashboard. '
-        'This clears your current password and sets the "must set password" flag, '
-        'so the next time you log in you will be taken to the password-creation '
-        'screen exactly as in the first-access flow.',
-        '<b>Write to the support address</b> — send an e-mail to '
-        '<font name="Courier">faunadobrasilctfb@gmail.com</font> identifying '
-        'yourself and your username. The team will ask an administrator to reset '
-        'your account.',
+        'If you forget your password, you cannot reset it yourself. Two recovery options:',
+        S['body']))
+    for b in [
+        '<b>Contact your administrator</b> — the administrator clicks <i>Reset password</i> '
+        'next to your account in the Admin Dashboard. This clears your password and sets '
+        'the "must set password" flag, so your next login follows the first-access flow.',
+        '<b>Write to support</b> — e-mail '
+        '<font name="Courier">faunadobrasilctfb@gmail.com</font> with your username. '
+        'The team will ask an administrator to reset your account.',
     ]:
-        story.append(Paragraph(f'• {bullet}', S['bullet']))
+        story.append(Paragraph(f'• {b}', S['bullet']))
 
-    story += [Paragraph('1.3  Main Page', S['h2'])]
+    story += [Paragraph('1.4  Main Page', S['h2'])]
     story.append(Paragraph(
-        'After login the main page shows two analysis-type cards. Click one to '
-        'select the analysis type, enter a taxon name in the text field (you may '
-        'click a chip from your authorized taxa list to fill it automatically), '
-        'then press the action button.', S['body']))
+        'After login the main page shows two analysis-type cards. Click one, enter a '
+        'taxon name in the text field (or click a chip from your authorised taxa list '
+        'to fill it automatically), then press the action button.', S['body']))
 
-    # ── 2. Data Completeness ───────────────────────────────────────────────────
+    # 2. Data Completeness
     story += [PageBreak(), Paragraph('2. Data Completeness Analysis', S['h1']), rule()]
     story.append(Paragraph(
-        'This analysis evaluates the fraction of mandatory fields that are filled '
-        'in for each accepted species (<i>taxonomicstatus = NOME_ACEITO</i>, '
-        '<i>taxonrank = ESPECIE</i> or <i>SUBESPECIE</i>) within the requested '
-        'taxon. Results are aggregated by family, order, class, sub-class, and '
-        'phylum and include the responsible researcher for each group.', S['body']))
+        'This analysis evaluates the fraction of mandatory fields filled in for each '
+        'accepted species (<i>taxonomicstatus = NOME_ACEITO</i>, <i>taxonrank = ESPECIE</i> '
+        'or <i>SUBESPECIE</i>) within the requested taxon. '
+        '<b>Subspecies rule:</b> when a species has one or more accepted subspecies, '
+        'the species-level row is excluded and only its subspecies are used as analysis '
+        'units. Results are aggregated by family, order, class, sub-class, and phylum. '
+        'When the input taxon is a family, an additional breakdown by genus is produced.',
+        S['body']))
 
     story += [Paragraph('2.1  The 15 Evaluated Fields', S['h2'])]
     story.append(Paragraph(
-        'The following fields are always evaluated unless an ecological exclusion '
-        'rule applies (see §2.2):', S['body']))
+        'The following fields are evaluated for every species (subject to ecological '
+        'exclusion rules in §2.2):', S['body']))
     story.append(field_table([
         ('bibliographicreference', 'Primary bibliographic reference for the taxon.'),
         ('country',                'Country of occurrence (Brazil = BR).'),
@@ -301,281 +297,284 @@ def build_english(path):
         ('endemicbrazil',          'Whether the species is endemic to Brazil.'),
         ('environment',            'Environment type: epicontinental, marinho, or both.'),
         ('locality',               'Occurrence locality description.'),
-        ('epicontinentaldomain',   'Phytogeographic domain for freshwater/terrestrial species.'),
-        ('marinedomain',           'Marine biogeographic province (sea species only).'),
-        ('lifeform',               'Life-form / feeding guild (herbívoro, parasita, etc.).'),
+        ('epicontinentaldomain',   'Phytogeographic domain (freshwater / terrestrial species).'),
+        ('marinedomain',           'Marine biogeographic province (marine species).'),
+        ('lifeform',               'Life-form / feeding guild.'),
         ('habitat',                'Habitat description.'),
         ('vernacularname',         'Common name in Portuguese.'),
         ('vernacularnamelanguage', 'Language of the common name.'),
         ('vernacularnamelocality', 'Region to which the common name applies.'),
-        ('animalhostnames',        'Animal host species (non-herbivores only — see §2.2).'),
-        ('vegetalhostnames',       'Plant host species.'),
+        ('animalhostnames',        'Animal host species (see §2.2 for exclusion rules).'),
+        ('vegetalhostnames',       'Plant host species (see §2.2 for exclusion rules).'),
     ], S))
 
     story += [Spacer(1, 0.4*cm), Paragraph('2.2  Ecological Exclusion Rules', S['h2'])]
     story.append(Paragraph(
-        'Two fields can be excluded from both the numerator and the denominator '
-        'when they are biologically inapplicable:', S['body']))
+        'Certain fields are excluded from both the numerator and the denominator '
+        'when they are biologically inapplicable. The applicable denominator therefore '
+        'varies per species.', S['body']))
 
-    excl_data = [
+    story += [Paragraph('Domain fields', S['h3'])]
+    story.append(excl_table([
         [Paragraph('<b>Field excluded</b>', S['body']),
          Paragraph('<b>Condition</b>', S['body']),
          Paragraph('<b>Rationale</b>', S['body'])],
         [Paragraph('<font name="Courier" size="8.5">marinedomain</font>', S['body']),
          Paragraph('environment = <i>epicontinental</i>', S['body']),
-         Paragraph('A freshwater/terrestrial species has no marine biogeographic province.', S['body'])],
-        [Paragraph('<font name="Courier" size="8.5">animalhostnames</font>', S['body']),
-         Paragraph('lifeform = <i>herbívoro</i>', S['body']),
-         Paragraph('Herbivores feed on plants; the animal-host field is not applicable.', S['body'])],
-    ]
-    et = Table(excl_data, colWidths=[4.5*cm, 4.5*cm, 7*cm])
-    et.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), ORANGE),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
-    story.append(et)
+         Paragraph('A freshwater / terrestrial species has no marine biogeographic province.', S['body'])],
+        [Paragraph('<font name="Courier" size="8.5">epicontinentaldomain</font>', S['body']),
+         Paragraph('environment = <i>marinho</i>', S['body']),
+         Paragraph('A strictly marine species has no continental phytogeographic domain.', S['body'])],
+    ], S))
+    story.append(Spacer(1, 0.25*cm))
 
-    story += [Spacer(1, 0.3*cm),
-              Paragraph('Example: a freshwater beetle (<i>environment = epicontinental</i>) '
-                        'is evaluated against 14 fields instead of 15 because '
-                        '<i>marinedomain</i> is excluded from both the count of filled fields '
-                        'and the total applicable fields. The completeness percentage is '
-                        'therefore calculated over the applicable denominator only.', S['note'])]
+    story += [Paragraph('Host fields', S['h3'])]
+    story.append(Paragraph(
+        'The treatment of <font name="Courier" size="9">animalhostnames</font> and '
+        '<font name="Courier" size="9">vegetalhostnames</font> depends on the '
+        '<font name="Courier" size="9">lifeform</font> value:', S['body']))
+
+    host_data = [
+        [Paragraph('<b>lifeform value</b>', S['body']),
+         Paragraph('<b>Treatment</b>', S['body'])],
+        [Paragraph('<i>endoparasito, ectoparasito,</i> or <i>epibionte</i>', S['body']),
+         Paragraph('Both columns are merged into <b>one combined host slot</b>. '
+                   'The slot counts as filled if <i>either</i> column is non-empty; '
+                   'it counts as blank if both are empty. The denominator gains 1 '
+                   '(not 2) for these species.', S['body'])],
+        [Paragraph('<i>herbívoro</i>', S['body']),
+         Paragraph('<font name="Courier" size="8.5">animalhostnames</font> is excluded '
+                   '(herbivores feed on plants, not animals). '
+                   '<font name="Courier" size="8.5">vegetalhostnames</font> is '
+                   'evaluated normally.', S['body'])],
+        [Paragraph('Any other value (or blank)', S['body']),
+         Paragraph('Both <font name="Courier" size="8.5">animalhostnames</font> and '
+                   '<font name="Courier" size="8.5">vegetalhostnames</font> are '
+                   'excluded from the denominator.', S['body'])],
+    ]
+    ht = Table(host_data, colWidths=[5*cm, 11*cm])
+    ht.setStyle(_grid_style(BLUE_MID))
+    story.append(ht)
+
+    story.append(Spacer(1, 0.3*cm))
+    story.append(Paragraph(
+        'Examples: (1) A freshwater beetle (<i>environment = epicontinental</i>) is '
+        'scored over 14 fields — <i>marinedomain</i> removed. (2) An endoparasite '
+        'is scored over 14 fields — the two host columns are replaced by one combined '
+        'slot. (3) A predator (<i>lifeform = predador</i>) is scored over 13 fields '
+        '— both host columns excluded.', S['note']))
 
     story += [Paragraph('2.3  Completeness Formula', S['h2'])]
+    story.append(Paragraph('For each species / subspecies the score is:', S['body']))
     story.append(Paragraph(
-        'For each species the completeness score is computed as:', S['body']))
-    story.append(Paragraph(
-        'completeness (%) = (filled applicable fields) / (total applicable fields) × 100',
+        'completeness (%) = (filled applicable fields) / (applicable fields) × 100',
         S['code']))
     story.append(Paragraph(
-        'The score is then aggregated per taxonomic group using the mean, minimum, '
-        'and maximum across all species in that group. The <b>amplitude</b> '
-        '(max − min) indicates within-group heterogeneity.', S['body']))
+        'Results are aggregated per taxonomic group as mean, minimum, and maximum '
+        'completeness across all units in that group. '
+        '<b>Amplitude</b> (max − min) measures within-group heterogeneity.',
+        S['body']))
 
-    story += [Paragraph('2.4  Researcher Attribution', S['h2'])]
+    story += [Paragraph('2.4  Subspecies Rule', S['h2'])]
+    story.append(Paragraph(
+        'When a species has at least one accepted subspecies '
+        '(<i>taxonrank = SUBESPECIE, taxonomicstatus = NOME_ACEITO</i>), the '
+        'species-level row is <b>excluded</b> from the analysis and its accepted '
+        'subspecies are used as the analysis units instead. This ensures that the '
+        'completeness is measured at the finest accepted resolution available for '
+        'each lineage.', S['body']))
+
+    story += [Paragraph('2.5  Researcher Attribution', S['h2'])]
     story.append(Paragraph(
         'Each aggregated row lists the researcher (<i>nome_completo</i>) responsible '
-        'for that group. The lookup climbs the taxonomic hierarchy starting at the '
-        'group\'s own rank and moving upward until a responsible researcher is found. '
-        'When the researcher is found at a rank higher than the row\'s own rank, the '
-        'cell is annotated with "(via &lt;rank&gt;)" to make the delegation '
-        'transparent.', S['body']))
+        'for that group. The lookup starts at the group\'s own rank and climbs the '
+        'hierarchy until a responsible researcher is found. When resolved above the '
+        'row\'s rank, the cell is annotated with "(via &lt;rank&gt;)" to make '
+        'delegation transparent.', S['body']))
 
-    story += [Paragraph('2.5  Output Files', S['h2'])]
-    story.append(Paragraph(
-        'Results are packaged in a ZIP file containing:', S['body']))
+    story += [Paragraph('2.6  Output Files', S['h2'])]
+    story.append(Paragraph('Results are packaged in a ZIP file containing:', S['body']))
     story.append(output_table([
-        ('completeness.xlsx',    'Six spreadsheet tabs: by_species, by_family, by_order, by_class, by_subclass, by_phylum. Each tab includes the taxonomic context columns, species count, mean/min/max completeness, amplitude, and responsible researcher.'),
-        ('by_family.pdf',        'Horizontal bar chart of mean completeness by family, sorted alphabetically, with min–max error bars. The most complete family is highlighted in red.'),
-        ('by_order.pdf',         'Same chart aggregated by order.'),
-        ('by_class.pdf',         'Same chart aggregated by class.'),
-        ('by_subclass.pdf',      'Same chart aggregated by subclass (omitted if no subclass data).'),
-        ('by_phylum.pdf',        'Same chart aggregated by phylum (omitted for single-phylum queries).'),
+        ('completeness_per_species.xlsx',
+         'One row per species / subspecies: taxon_analisado, taxonomic context, '
+         'taxonrank, completeness (%), filled_count, total_applicable, pesquisador.'),
+        ('completeness_by_genus.xlsx',
+         'Aggregation by genus (only when the input taxon is a family): '
+         'n_spp_ctfb, mean/min/max completeness, amplitude, pesquisador.'),
+        ('completeness_by_family.xlsx',
+         'Aggregation by family: same columns as above.'),
+        ('completeness_by_order.xlsx',   'Aggregation by order.'),
+        ('completeness_by_class.xlsx',   'Aggregation by class.'),
+        ('completeness_by_subclass.xlsx','Aggregation by subclass (omitted if no subclass data).'),
+        ('completeness_by_phylum.xlsx',  'Aggregation by phylum (omitted for single-phylum queries).'),
+        ('completeness_histograms_genus.pdf',
+         'Horizontal bar chart of mean completeness by genus '
+         '(only when input is a family), with min–max error bars.'),
+        ('completeness_histograms_family.pdf',
+         'Horizontal bar chart by family. The highest-mean bar is coloured red.'),
+        ('completeness_histograms_order.pdf',    'Same chart by order.'),
+        ('completeness_histograms_class.pdf',    'Same chart by class.'),
+        ('completeness_histograms_subclass.pdf', 'Same chart by subclass.'),
+        ('completeness_histograms_phylum.pdf',   'Same chart by phylum.'),
     ], S))
 
-    # ── 3. Species-List Completeness ───────────────────────────────────────────
+    # 3. GBIF
     story += [PageBreak(), Paragraph('3. Species-List Completeness (GBIF)', S['h1']), rule()]
     story.append(Paragraph(
         'This analysis compares the CTFB accepted species list against species '
-        'recorded in Brazil on the Global Biodiversity Information Facility (GBIF), '
-        'identifying species that occur in Brazil but are absent from the catalogue. '
-        'The analysis runs entirely in the background and reports progress in real '
-        'time on the status page.', S['body']))
+        'recorded in Brazil on GBIF, identifying species that occur in Brazil '
+        'but are absent from the catalogue. The job runs in the background; '
+        'the status page auto-refreshes every 2 seconds.', S['body']))
 
-    story += [Paragraph('3.1  How It Works', S['h2'])]
-    story.append(Paragraph(
-        'The analysis is divided into four sequential phases:', S['body']))
-
-    phases = [
+    story += [Paragraph('3.1  How It Works — Four Phases', S['h2'])]
+    for title, body in [
         ('Phase 1 — Taxon resolution',
-         'The taxon name you entered is resolved to a GBIF internal identifier '
-         '(<i>usageKey</i>) via the GBIF Species Match API '
-         '(api.gbif.org/v1/species/match). An error is returned if the name is '
-         'not found.'),
+         'The taxon name is resolved to a GBIF internal identifier (<i>usageKey</i>) '
+         'via the GBIF Species Match API (api.gbif.org/v1/species/match). '
+         'An error is returned if the name is not recognised.'),
         ('Phase 2 — Species key collection',
          'The GBIF Occurrence Search API is queried with filters country=BR and '
-         'taxonKey=&lt;resolved key&gt;, using facets on the speciesKey field to '
-         'retrieve the list of all species with at least one occurrence record in '
-         'Brazil. Pagination is applied automatically for taxa with more than '
-         '50 000 species.'),
+         'taxonKey=&lt;resolved key&gt;, using facets on speciesKey to retrieve all '
+         'species with at least one occurrence record in Brazil. Pagination is applied '
+         'automatically for taxa with more than 50 000 species.'),
         ('Phase 3 — Name resolution',
-         'Each species key is resolved to a canonical binomial name (genus + '
-         'specific epithet) and its higher taxonomy (family, order, class, phylum) '
-         'via the GBIF Species API. Up to 20 parallel requests are made '
-         'simultaneously, matching GBIF\'s rate limit. For large taxa this phase '
-         'takes the most time.'),
+         'Each species key is resolved to a canonical binomial (genus + specific '
+         'epithet) and its higher taxonomy (family, order, class, phylum) via the '
+         'GBIF Species API. Up to 20 parallel requests run simultaneously. '
+         'Fossil / extinct species (<i>extinct = true</i> in GBIF) are excluded at '
+         'this stage.'),
         ('Phase 4 — Comparison with CTFB',
-         'CTFB species with taxonomicstatus = NOME_ACEITO and taxonrank = ESPECIE '
-         'are extracted and represented as lowercase canonical binomials '
-         '(genus + specificepithet). GBIF binomials not found in this set are '
-         'classified as absent from the catalogue.'),
-    ]
-    for title, body in phases:
-        story += [KeepTogether([
+         'CTFB species with <i>taxonomicstatus = NOME_ACEITO</i> and '
+         '<i>taxonrank = ESPECIE</i> are extracted as lowercase canonical binomials. '
+         'Each GBIF binomial is classified as: <b>present</b> (matched to an accepted '
+         'name), <b>synonym</b> (matched to a synonym in CTFB), or '
+         '<b>absent</b> (not found in any form).'),
+    ]:
+        story.append(KeepTogether([
             Paragraph(f'<b>{title}</b>', S['h3']),
             Paragraph(body, S['body']),
-        ])]
+        ]))
 
-    story += [Paragraph('3.2  Matching Method and Caveats', S['h2'])]
+    story += [Paragraph('3.2  Matching and Caveats', S['h2'])]
     story.append(Paragraph(
-        'Matching is done on the <b>lowercase canonical binomial</b> '
-        '(genus + specificEpithet). This means:', S['body']))
-    for bullet in [
+        'Matching is performed on the <b>lowercase canonical binomial</b>. '
+        'Key caveats:', S['body']))
+    for b in [
         'Species with identical binomials in GBIF and CTFB are counted as present, regardless of author or year.',
-        'Nomenclatural discrepancies — such as genus synonymy, spelling variants, or different taxonomic treatments — will cause a species to appear as "absent" even if it is represented under a different name in CTFB.',
+        'A GBIF name matched to a CTFB synonym (non-NOME_ACEITO record with the same binomial) is classified as <i>Sinonimos_no_CTFB</i>, not as absent.',
+        'Nomenclatural discrepancies — genus synonymy, spelling variants, different taxonomic treatments — cause a species to appear "absent" even if represented under a different name in CTFB. Manual review is recommended.',
         'Infraspecific taxa (subspecies, varieties) are excluded from both sides of the comparison.',
-        'Manual review of the gap list is recommended, especially for groups with known nomenclatural instability.',
+        'Fossil taxa are excluded (GBIF <i>extinct = true</i>).',
     ]:
-        story.append(Paragraph(f'• {bullet}', S['bullet']))
+        story.append(Paragraph(f'• {b}', S['bullet']))
 
     story += [Paragraph('3.3  Output File', S['h2'])]
-    story.append(Paragraph(
-        'A single XLSX file is downloaded with three sheets:', S['body']))
+    story.append(Paragraph('A single XLSX file with four sheets:', S['body']))
     story.append(output_table([
-        ('Ausentes_no_CTFB',    'All GBIF species (Brazil) absent from CTFB, sorted by phylum → class → order → family → name. Columns: phylum_gbif, classe_gbif, ordem_gbif, familia_gbif, nome_cientifico, gbif_species_key.'),
-        ('Resumo_por_Familia',  'Summary per family: number of GBIF species absent from CTFB, total GBIF species in that family, and percentage absent. Sorted by number of absent species (descending).'),
-        ('Presentes_no_CTFB',   'GBIF species that were matched to a CTFB NOME_ACEITO record. Useful for cross-checking and understanding coverage.'),
+        ('Ausentes_no_CTFB',
+         'GBIF species (Brazil, non-fossil) absent from CTFB in any form. '
+         'Columns: phylum_gbif, classe_gbif, ordem_gbif, familia_gbif, '
+         'nome_cientifico, gbif_species_key. Sorted phylum → class → order → family → name.'),
+        ('Sinonimos_no_CTFB',
+         'GBIF species whose binomial matches a synonym (non-NOME_ACEITO) record in CTFB. '
+         'Same columns as Ausentes_no_CTFB.'),
+        ('Resumo_por_Familia',
+         'Summary per family: total GBIF species, absent count, synonym count, '
+         'present count. Sorted by absent count descending.'),
+        ('Presentes_no_CTFB',
+         'GBIF species matched to a CTFB NOME_ACEITO record. Useful for coverage '
+         'cross-checking.'),
     ], S))
 
     story += [Paragraph('3.4  Expected Run Time', S['h2'])]
-    time_data = [
+    story.append(time_table([
         [Paragraph('<b>Taxon scale</b>', S['body']),
          Paragraph('<b>Approx. GBIF species</b>', S['body']),
          Paragraph('<b>Estimated time</b>', S['body'])],
-        [Paragraph('Small order (e.g. Nematomorpha)', S['body']),
-         Paragraph('< 200', S['body']),
-         Paragraph('10–30 seconds', S['body'])],
-        [Paragraph('Medium order (e.g. Araneae)', S['body']),
-         Paragraph('~5 000', S['body']),
-         Paragraph('2–5 minutes', S['body'])],
-        [Paragraph('Large order (e.g. Coleoptera)', S['body']),
-         Paragraph('~100 000', S['body']),
-         Paragraph('15–30 minutes', S['body'])],
-        [Paragraph('Full phylum (e.g. Arthropoda)', S['body']),
-         Paragraph('> 200 000', S['body']),
-         Paragraph('1–3 hours', S['body'])],
-    ]
-    tt = Table(time_data, colWidths=[5.5*cm, 4.5*cm, 6*cm])
-    tt.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), BLUE_MID),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING',    (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
-    story.append(tt)
+        [Paragraph('Small order (e.g. Nematomorpha)', S['body']), Paragraph('< 200', S['body']),    Paragraph('10–30 seconds', S['body'])],
+        [Paragraph('Medium order (e.g. Araneae)',     S['body']), Paragraph('~5 000', S['body']),   Paragraph('2–5 minutes', S['body'])],
+        [Paragraph('Large order (e.g. Coleoptera)',   S['body']), Paragraph('~100 000', S['body']), Paragraph('15–30 minutes', S['body'])],
+        [Paragraph('Full phylum (e.g. Arthropoda)',   S['body']), Paragraph('> 200 000', S['body']),Paragraph('1–3 hours', S['body'])],
+    ], S))
+    story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
-        'The status page auto-refreshes every 2 seconds and shows a progress bar. '
-        'You may close the tab and return later; the job continues server-side '
-        'until completion or until the server is redeployed.', S['note']))
+        'You may close the tab and return later; the job continues server-side until '
+        'completion or the next redeployment.', S['note']))
 
-    # ── 4. Administration ──────────────────────────────────────────────────────
+    # 4. Administration
     story += [PageBreak(), Paragraph('4. Administration', S['h1']), rule()]
     story.append(Paragraph(
-        'Administrator accounts have access to the Admin Dashboard via the link '
-        'at the bottom of the main page.', S['body']))
+        'Administrator accounts access the Admin Dashboard via the link at the bottom '
+        'of the main page.', S['body']))
 
     story += [Paragraph('4.1  User Management', S['h2'])]
     for item in [
-        ('<b>Bulk import</b> — paste a list of usernames (logins) from <i>pesquisadores.xlsx</i>. '
-         'Each user is created with the flag "must set password on first login". '
-         'Users not found in the spreadsheet are rejected.'),
-        ('<b>Individual add</b> — create a single user with an immediately usable password.'),
-        ('<b>Export CSV</b> — download a backup of all user accounts including hashed passwords. '
-         'Recommended before every redeployment when using SQLite.'),
-        ('<b>Restore CSV</b> — re-import users from a previously exported CSV. '
-         'Existing accounts are skipped; hashed passwords are restored so users '
-         'do not need to reset their passwords.'),
+        '<b>Bulk import</b> — paste a list of usernames from <i>pesquisadores.xlsx</i>. '
+        'Each user is created with the "must set password" flag. '
+        'Usernames not found in the spreadsheet are rejected.',
+        '<b>Individual add</b> — create a single user with an immediately usable password.',
+        '<b>Export CSV</b> — download a backup of all user accounts including hashed passwords. '
+        'Recommended before every redeployment when using SQLite.',
+        '<b>Restore CSV</b> — re-import users from a previously exported CSV. '
+        'Existing accounts are skipped; hashed passwords are restored.',
+        '<b>Reset password</b> — clears a user\'s password and sets the '
+        '"must set password" flag. The user follows the first-access flow on next login.',
     ]:
         story.append(Paragraph(f'• {item}', S['bullet']))
 
     story += [Paragraph('4.2  Database Persistence', S['h2'])]
-    story.append(Paragraph(
-        'The system supports two database backends:', S['body']))
-    db_data = [
+    story.append(db_table([
         [Paragraph('<b>Backend</b>', S['body']),
          Paragraph('<b>Persistence</b>', S['body']),
          Paragraph('<b>How to activate</b>', S['body'])],
         [Paragraph('PostgreSQL', S['body']),
          Paragraph('Permanent — survives all redeployments.', S['body']),
-         Paragraph('Set the DATABASE_URL environment variable to a postgresql:// connection string (e.g. from Railway).', S['body'])],
+         Paragraph('Set DATABASE_URL to a postgresql:// connection string (e.g. from Railway).', S['body'])],
         [Paragraph('SQLite', S['body']),
-         Paragraph('Ephemeral — data is lost on each redeployment.', S['body']),
-         Paragraph('Default when DATABASE_URL is not set. A warning banner is shown on the Admin Dashboard.', S['body'])],
-    ]
-    dbt = Table(db_data, colWidths=[3*cm, 4*cm, 9*cm])
-    dbt.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), BLUE_DARK),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
-    story.append(dbt)
+         Paragraph('Ephemeral — lost on each redeployment.', S['body']),
+         Paragraph('Default when DATABASE_URL is not set. A warning banner appears on the Admin Dashboard.', S['body'])],
+    ], S))
 
     story += [Paragraph('4.3  Data Sources', S['h2'])]
     story.append(Paragraph(
-        'The system loads two Google Sheets on startup. If a Sheet is unreachable '
-        '(e.g. offline), the system falls back to local XLSX files stored in the '
-        '<i>data/</i> directory of the server.', S['body']))
+        'Two Google Sheets are loaded on startup. If unreachable, the system falls '
+        'back to local XLSX files in the <i>data/</i> directory.', S['body']))
     story.append(output_table([
-        ('pesquisadores.xlsx', 'Researcher registry: login, nome_completo, táxons, institution. Drives user authorization and researcher attribution in output tables.'),
-        ('planilha_extendida.xlsx', 'Extended CTFB catalogue with all Darwin Core fields plus manual fields. This is the source for all completeness calculations.'),
+        ('pesquisadores.xlsx',      'Researcher registry: login, nome_completo, táxons, institution. Drives authorisation and researcher attribution.'),
+        ('planilha_extendida.xlsx', 'Extended CTFB catalogue (Darwin Core + manual fields). Source for all completeness calculations.'),
     ], S, col1='File', col2='Contents'))
 
-    # ── 5. Interpreting Results ────────────────────────────────────────────────
+    # 5. Interpreting
     story += [PageBreak(), Paragraph('5. Interpreting Results', S['h1']), rule()]
 
     story += [Paragraph('5.1  Data Completeness Charts', S['h2'])]
     story.append(Paragraph(
-        'Each PDF chart shows a horizontal bar per taxonomic group. The bar '
-        'length represents the mean completeness (%). Error bars extend to the '
-        'minimum and maximum completeness found within the group. The bar with '
-        'the highest mean is coloured red; all others are blue. Values are '
-        'annotated to the right of each bar.', S['body']))
+        'Each PDF shows a horizontal bar per taxon. Bar length = mean completeness (%). '
+        'Error bars extend to the minimum and maximum within the group. The highest-mean '
+        'bar is coloured red; all others are blue. Percentages are annotated to the right.',
+        S['body']))
     story.append(Paragraph(
-        'A group with 100% mean completeness and zero amplitude is perfectly '
-        'homogeneous — every species has all applicable fields filled. A wide '
-        'amplitude indicates that some species are well-documented while others '
-        'lack many fields, signalling where curatorial effort should be focused.',
+        'A group with 100% mean and zero amplitude is perfectly homogeneous. '
+        'Wide amplitude signals that some species are well-documented while others '
+        'lack many fields — indicating where curatorial effort should be directed.',
         S['body']))
 
     story += [Paragraph('5.2  Species Gap List', S['h2'])]
     story.append(Paragraph(
-        'The <i>Ausentes_no_CTFB</i> sheet lists candidate species for inclusion '
-        'in the catalogue. Before acting on an entry, always consider:', S['body']))
-    for bullet in [
-        'Nomenclatural differences — the species may already be in CTFB under a different (but synonymous) binomial.',
-        'Taxonomic scope — GBIF occurrences include records from all habitats; some species may be marine and outside the scope of CTFB\'s current coverage.',
-        'Record quality — some GBIF records are misidentified or lack coordinate precision. High-uncertainty records should be verified.',
-        'Subspecific taxa — the analysis covers species level only; subspecies absent from CTFB are not flagged.',
+        'The <i>Ausentes_no_CTFB</i> sheet lists candidate species for inclusion. '
+        'Before acting on any entry, consider:', S['body']))
+    for b in [
+        'Nomenclatural differences — the species may already be in CTFB under a synonymous binomial (check <i>Sinonimos_no_CTFB</i> first).',
+        'Taxonomic scope — some GBIF records may refer to marine species outside CTFB\'s current coverage.',
+        'Record quality — some GBIF records are misidentified or poorly georeferenced. High-uncertainty records should be verified.',
+        'Subspecific taxa — the GBIF comparison covers species level only.',
     ]:
-        story.append(Paragraph(f'• {bullet}', S['bullet']))
+        story.append(Paragraph(f'• {b}', S['bullet']))
 
-    # ── Footer ─────────────────────────────────────────────────────────────────
     story += [
-        Spacer(1, 1.5*cm),
-        section_rule(),
-        Paragraph(
-            'Problems or questions? Write to '
-            '<font name="Courier">faunadobrasilctfb@gmail.com</font>',
-            S['footer']),
+        Spacer(1, 1.5*cm), section_rule(),
+        Paragraph('Problems or questions? Write to '
+                  '<font name="Courier">faunadobrasilctfb@gmail.com</font>', S['footer']),
         Spacer(1, 0.15*cm),
         Paragraph('Porcentômetro · CTFB · April 2026 · English edition', S['footer']),
     ]
@@ -594,325 +593,324 @@ def build_portuguese(path):
                             topMargin=MARGIN, bottomMargin=MARGIN,
                             title='Porcentômetro — Manual do Usuário',
                             author='CTFB / Taxon Analysis App')
-
     story = []
 
-    # ── Capa ───────────────────────────────────────────────────────────────────
+    # Capa
     story += [
         Spacer(1, 2*cm),
         Paragraph('Porcentômetro', S['title']),
         Paragraph('Sistema de Avaliação da Completude', S['subtitle']),
         Paragraph('Catálogo Taxonômico da Fauna do Brasil (CTFB)', S['subtitle']),
-        Spacer(1, 0.4*cm),
-        rule(),
-        Spacer(1, 0.3*cm),
+        Spacer(1, 0.4*cm), rule(), Spacer(1, 0.3*cm),
         Paragraph('Manual do Usuário — Português', S['version']),
-        Paragraph('Versão 2.0 · Abril de 2026', S['version']),
+        Paragraph('Versão 2.1 · Abril de 2026', S['version']),
         Spacer(1, 1.2*cm),
         url_box('Acesse a aplicação em:', S),
         Spacer(1, 2*cm),
+        Paragraph(
+            'O <b>Porcentômetro</b> é uma ferramenta web desenvolvida para o '
+            '<i>Catálogo Taxonômico da Fauna do Brasil</i> (CTFB). Oferece dois tipos '
+            'de análise complementares: (1) <b>Completude dos Dados</b> — grau de '
+            'preenchimento dos campos obrigatórios das espécies catalogadas; e '
+            '(2) <b>Completude da Lista de Espécies</b> — comparação dos registros '
+            'do CTFB com o Global Biodiversity Information Facility (GBIF) para '
+            'identificar espécies do Brasil ausentes no catálogo.', S['body']),
+        PageBreak(),
     ]
 
-    story.append(Paragraph(
-        'O <b>Porcentômetro</b> é uma ferramenta web desenvolvida para o '
-        '<i>Catálogo Taxonômico da Fauna do Brasil</i> (CTFB). Ele oferece dois '
-        'tipos de análise complementares: (1) a <b>Completude dos Dados</b>, que '
-        'mede o grau de preenchimento dos campos obrigatórios das espécies já '
-        'catalogadas, e (2) a <b>Completude da Lista de Espécies</b>, que compara '
-        'os registros do CTFB com os do Global Biodiversity Information Facility '
-        '(GBIF) para identificar espécies conhecidas do Brasil ausentes no '
-        'catálogo.', S['body']))
-    story.append(PageBreak())
-
-    # ── 1. Acesso ──────────────────────────────────────────────────────────────
+    # 1. Acesso
     story += [Paragraph('1. Acesso ao Sistema', S['h1']), rule()]
     story.append(url_box('Acesse a aplicação em qualquer navegador moderno:', S))
     story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph(
-        'Você verá uma tela de login. Informe seu usuário e senha. Se este for seu '
-        'primeiro acesso após ser cadastrado por um administrador, você será '
-        'direcionado para criar sua própria senha antes de continuar.', S['body']))
+        'Você verá a tela de login. Informe seu usuário e senha. Se este for seu '
+        'primeiro acesso após ser cadastrado por um administrador, o sistema '
+        'pedirá que você crie sua própria senha antes de continuar.', S['body']))
 
     story += [Paragraph('1.1  Autorização de Acesso', S['h2'])]
     story.append(Paragraph(
-        'Cada usuário está associado a um ou mais táxons listados na planilha de '
-        'pesquisadores (<i>pesquisadores.xlsx</i>). Você pode analisar qualquer '
-        'táxon de sua área de responsabilidade e todos os grupos subordinados '
-        'hierarquicamente. Usuários associados a <i>Animalia</i> têm acesso a '
-        'todo o catálogo. Administradores podem analisar qualquer táxon.',
-        S['body']))
+        'Cada usuário está associado a um ou mais táxons da planilha de pesquisadores '
+        '(<i>pesquisadores.xlsx</i>). Você pode analisar qualquer táxon de sua área '
+        'de responsabilidade e todos os grupos subordinados. Usuários vinculados a '
+        '<i>Animalia</i> têm acesso a todo o catálogo. Administradores podem analisar '
+        'qualquer táxon.', S['body']))
 
     story += [Paragraph('1.2  Primeiro Acesso — Criação de Senha', S['h2'])]
     story.append(Paragraph(
-        'Usuários cadastrados pelo administrador por meio da importação em lote '
-        '<b>não possuem senha definida</b>. No primeiro acesso, o sistema detecta '
-        'isso automaticamente e redireciona você para a tela de criação de senha '
-        'antes de liberar o acesso. Siga os passos abaixo:', S['body']))
-
-    steps_pt = [
+        'Usuários cadastrados pelo administrador via importação em lote <b>não possuem '
+        'senha definida</b>. No primeiro acesso o sistema detecta isso e redireciona '
+        'para a tela de criação de senha. Siga os passos:', S['body']))
+    story.append(steps_table([
         [Paragraph('<b>1</b>', S['body']),
-         Paragraph('Abra a URL da aplicação, informe seu nome de usuário (login) no '
-                   'formulário e clique em <i>Entrar</i>. O campo de senha pode ficar '
-                   'em branco ou com qualquer valor — ele será ignorado nesta etapa.',
-                   S['body'])],
+         Paragraph('Abra a URL e informe seu login. Deixe o campo de senha <b>em branco</b> '
+                   '(ou qualquer valor — será ignorado) e clique em <i>Entrar</i>.', S['body'])],
         [Paragraph('<b>2</b>', S['body']),
-         Paragraph('O sistema identifica que a senha ainda não foi definida e redireciona '
-                   'automaticamente para a tela <b>Definir Senha</b>, que exibe uma '
-                   'mensagem de boas-vindas com o seu nome de usuário.', S['body'])],
+         Paragraph('O sistema redireciona para a tela <b>Definir Senha</b> com uma '
+                   'mensagem de boas-vindas.', S['body'])],
         [Paragraph('<b>3</b>', S['body']),
-         Paragraph('Digite uma nova senha com <b>no mínimo 6 caracteres</b> no campo '
-                   '"Nova senha", repita-a no campo "Confirme a senha" e clique em '
-                   '<i>Definir senha e entrar</i>.', S['body'])],
+         Paragraph('Digite uma nova senha com <b>no mínimo 6 caracteres</b>, repita-a '
+                   'e clique em <i>Definir senha e entrar</i>.', S['body'])],
         [Paragraph('<b>4</b>', S['body']),
-         Paragraph('Se as senhas coincidirem e atenderem ao tamanho mínimo, sua senha '
-                   'é salva e você é imediatamente autenticado e redirecionado para a '
-                   'página principal de análise.', S['body'])],
+         Paragraph('Se as senhas coincidirem e atenderem ao tamanho mínimo, você é '
+                   'autenticado e redirecionado para a página principal.', S['body'])],
         [Paragraph('<b>5</b>', S['body']),
-         Paragraph('A partir daí, use seu login e a senha criada em todos os acessos '
-                   'subsequentes.', S['body'])],
-    ]
-    steps_t = Table(steps_pt, colWidths=[1*cm, W - 2*MARGIN - 1.4*cm])
-    steps_t.setStyle(TableStyle([
-        ('VALIGN',        (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING',    (0, 0), (-1, -1), 5),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING',   (0, 0), (0, -1), 0),
-        ('LEFTPADDING',   (1, 0), (1, -1), 8),
-        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.white, GREY_LIGHT]),
-        ('BOX',           (0, 0), (-1, -1), 0.4, colors.HexColor('#dce1e7')),
-        ('GRID',          (0, 0), (-1, -1), 0.4, colors.HexColor('#dce1e7')),
-    ]))
-    story.append(steps_t)
+         Paragraph('Nos acessos seguintes, use seu login e a senha recém-criada.',
+                   S['body'])],
+    ], S))
     story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
-        'Se as senhas não coincidirem ou tiverem menos de 6 caracteres, uma '
-        'mensagem de erro é exibida na mesma tela e você pode tentar novamente. '
-        'Nenhum dado é perdido nesse caso.', S['note']))
+        'Se as senhas não coincidirem ou forem curtas demais, uma mensagem de erro '
+        'é exibida na mesma tela. Nenhum dado é perdido.', S['note']))
 
     story += [Paragraph('1.3  Senha Esquecida', S['h2'])]
     story.append(Paragraph(
-        'Se você esquecer sua senha, não é possível redefini-la por conta própria. '
-        'Há duas formas de recuperar o acesso:', S['body']))
-    for bullet in [
-        '<b>Contate o administrador</b> — o administrador pode clicar em '
-        '<i>Redefinir senha</i> ao lado da sua conta no Painel Admin. '
-        'Isso apaga a senha atual e ativa o flag "deve definir senha", de modo '
-        'que no próximo acesso você será direcionado para a tela de criação de '
-        'senha, exatamente como no primeiro acesso.',
-        '<b>Escreva para o suporte</b> — envie um e-mail para '
-        '<font name="Courier">faunadobrasilctfb@gmail.com</font> identificando-se '
-        'e informando seu nome de usuário. A equipe solicitará ao administrador '
-        'que redefina seu acesso.',
+        'Não é possível redefinir a senha por conta própria. Duas opções:', S['body']))
+    for b in [
+        '<b>Contate o administrador</b> — ele clica em <i>Redefinir senha</i> ao lado '
+        'da sua conta no Painel Admin. Isso apaga a senha atual e ativa o flag '
+        '"deve definir senha", de modo que no próximo acesso você seguirá o fluxo '
+        'do primeiro acesso.',
+        '<b>Escreva para o suporte</b> — envie e-mail para '
+        '<font name="Courier">faunadobrasilctfb@gmail.com</font> com seu nome de '
+        'usuário. A equipe solicitará ao administrador que redefina seu acesso.',
     ]:
-        story.append(Paragraph(f'• {bullet}', S['bullet']))
+        story.append(Paragraph(f'• {b}', S['bullet']))
 
     story += [Paragraph('1.4  Página Principal', S['h2'])]
     story.append(Paragraph(
-        'Após o login, a página principal exibe dois cartões de seleção de tipo de '
-        'análise. Clique no cartão desejado, informe o nome do táxon no campo de '
-        'texto (você pode clicar em um dos botões de táxons autorizados para '
-        'preenchê-lo automaticamente) e pressione o botão de ação.', S['body']))
+        'Após o login, a página principal exibe dois cartões de seleção de análise. '
+        'Clique no cartão desejado, informe o nome do táxon (ou clique em um dos '
+        'botões de táxons autorizados para preenchimento automático) e pressione '
+        'o botão de ação.', S['body']))
 
-    # ── 2. Completude dos Dados ────────────────────────────────────────────────
+    # 2. Completude dos Dados
     story += [PageBreak(), Paragraph('2. Análise de Completude dos Dados', S['h1']), rule()]
     story.append(Paragraph(
         'Esta análise avalia a fração de campos obrigatórios preenchidos para cada '
         'espécie aceita (<i>taxonomicstatus = NOME_ACEITO</i>, '
-        '<i>taxonrank = ESPECIE</i> ou <i>SUBESPECIE</i>) dentro do táxon '
-        'solicitado. Os resultados são agregados por família, ordem, classe, '
-        'subclasse e filo, incluindo o pesquisador responsável por cada grupo.',
-        S['body']))
+        '<i>taxonrank = ESPECIE</i> ou <i>SUBESPECIE</i>) dentro do táxon solicitado. '
+        '<b>Regra de subespécies:</b> quando uma espécie possui subespécies aceitas, '
+        'a linha da espécie é excluída e apenas as subespécies são usadas como '
+        'unidades de análise. Os resultados são agregados por família, ordem, classe, '
+        'subclasse e filo. Quando o táxon de entrada é uma família, é gerada também '
+        'uma agregação por gênero.', S['body']))
 
     story += [Paragraph('2.1  Os 15 Campos Avaliados', S['h2'])]
     story.append(Paragraph(
-        'Os campos a seguir são sempre avaliados, salvo quando uma regra de '
-        'exclusão ecológica se aplica (ver §2.2):', S['body']))
-    story.append(field_table([
+        'Os campos a seguir são avaliados para cada espécie (sujeitos às regras de '
+        'exclusão ecológica da §2.2):', S['body']))
+    story.append(field_table_pt([
         ('bibliographicreference', 'Referência bibliográfica primária do táxon.'),
         ('country',                'País de ocorrência (Brasil = BR).'),
         ('establishmentmeans',     'Nativa, invasora, introduzida, etc.'),
         ('endemicbrazil',          'Indica se a espécie é endêmica do Brasil.'),
         ('environment',            'Tipo de ambiente: epicontinental, marinho ou ambos.'),
         ('locality',               'Descrição da localidade de ocorrência.'),
-        ('epicontinentaldomain',   'Domínio fitogeográfico para espécies dulcícolas/terrestres.'),
-        ('marinedomain',           'Província biogeográfica marinha (apenas espécies marinhas).'),
-        ('lifeform',               'Forma de vida / guilda alimentar (herbívoro, parasita, etc.).'),
+        ('epicontinentaldomain',   'Domínio fitogeográfico (espécies dulcícolas/terrestres).'),
+        ('marinedomain',           'Província biogeográfica marinha (espécies marinhas).'),
+        ('lifeform',               'Forma de vida / guilda alimentar.'),
         ('habitat',                'Descrição do habitat.'),
         ('vernacularname',         'Nome popular em português.'),
         ('vernacularnamelanguage', 'Idioma do nome popular.'),
         ('vernacularnamelocality', 'Região à qual o nome popular se refere.'),
-        ('animalhostnames',        'Espécies hospedeiras animais (exceto herbívoros — ver §2.2).'),
-        ('vegetalhostnames',       'Espécies hospedeiras vegetais.'),
+        ('animalhostnames',        'Espécies hospedeiras animais (ver §2.2 para regras de exclusão).'),
+        ('vegetalhostnames',       'Espécies hospedeiras vegetais (ver §2.2 para regras de exclusão).'),
     ], S))
 
     story += [Spacer(1, 0.4*cm), Paragraph('2.2  Regras de Exclusão Ecológica', S['h2'])]
     story.append(Paragraph(
-        'Dois campos podem ser excluídos do numerador e do denominador quando '
-        'biologicamente inaplicáveis:', S['body']))
+        'Determinados campos são excluídos do numerador e do denominador quando '
+        'são biologicamente inaplicáveis. O denominador efetivo varia por espécie.',
+        S['body']))
 
-    excl_data = [
+    story += [Paragraph('Campos de domínio geográfico', S['h3'])]
+    story.append(excl_table([
         [Paragraph('<b>Campo excluído</b>', S['body']),
          Paragraph('<b>Condição</b>', S['body']),
          Paragraph('<b>Justificativa</b>', S['body'])],
         [Paragraph('<font name="Courier" size="8.5">marinedomain</font>', S['body']),
          Paragraph('environment = <i>epicontinental</i>', S['body']),
          Paragraph('Espécies dulcícolas/terrestres não possuem província biogeográfica marinha.', S['body'])],
-        [Paragraph('<font name="Courier" size="8.5">animalhostnames</font>', S['body']),
-         Paragraph('lifeform = <i>herbívoro</i>', S['body']),
-         Paragraph('Herbívoros se alimentam de plantas; o campo de hospedeiro animal não se aplica.', S['body'])],
+        [Paragraph('<font name="Courier" size="8.5">epicontinentaldomain</font>', S['body']),
+         Paragraph('environment = <i>marinho</i>', S['body']),
+         Paragraph('Espécies estritamente marinhas não possuem domínio fitogeográfico continental.', S['body'])],
+    ], S))
+    story.append(Spacer(1, 0.25*cm))
+
+    story += [Paragraph('Campos de hospedeiro', S['h3'])]
+    story.append(Paragraph(
+        'O tratamento de <font name="Courier" size="9">animalhostnames</font> e '
+        '<font name="Courier" size="9">vegetalhostnames</font> depende do valor de '
+        '<font name="Courier" size="9">lifeform</font>:', S['body']))
+
+    host_data_pt = [
+        [Paragraph('<b>Valor de lifeform</b>', S['body']),
+         Paragraph('<b>Tratamento</b>', S['body'])],
+        [Paragraph('<i>endoparasito, ectoparasito</i> ou <i>epibionte</i>', S['body']),
+         Paragraph('Os dois campos são fundidos em <b>um único slot de hospedeiro</b>. '
+                   'O slot é considerado preenchido se <i>qualquer um</i> dos campos '
+                   'não estiver vazio; vazio se ambos estiverem em branco. '
+                   'O denominador ganha 1 slot (não 2).', S['body'])],
+        [Paragraph('<i>herbívoro</i>', S['body']),
+         Paragraph('<font name="Courier" size="8.5">animalhostnames</font> é excluído '
+                   '(herbívoros se alimentam de plantas, não de animais). '
+                   '<font name="Courier" size="8.5">vegetalhostnames</font> é '
+                   'avaliado normalmente.', S['body'])],
+        [Paragraph('Qualquer outro valor (ou em branco)', S['body']),
+         Paragraph('Ambos <font name="Courier" size="8.5">animalhostnames</font> e '
+                   '<font name="Courier" size="8.5">vegetalhostnames</font> são '
+                   'excluídos do denominador.', S['body'])],
     ]
-    et = Table(excl_data, colWidths=[4.5*cm, 4.5*cm, 7*cm])
-    et.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), ORANGE),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
-    story.append(et)
-    story += [Spacer(1, 0.3*cm),
-              Paragraph('Exemplo: um besouro de água doce (<i>environment = epicontinental</i>) '
-                        'é avaliado em relação a 14 campos em vez de 15, pois '
-                        '<i>marinedomain</i> é excluído do numerador e do denominador. '
-                        'O percentual de completude é calculado sobre o denominador '
-                        'aplicável.', S['note'])]
+    ht_pt = Table(host_data_pt, colWidths=[5*cm, 11*cm])
+    ht_pt.setStyle(_grid_style(BLUE_MID))
+    story.append(ht_pt)
+
+    story.append(Spacer(1, 0.3*cm))
+    story.append(Paragraph(
+        'Exemplos: (1) Um besouro de água doce (<i>environment = epicontinental</i>) '
+        'é avaliado em 14 campos — <i>marinedomain</i> removido. '
+        '(2) Um endoparasito é avaliado em 14 campos — os dois campos de hospedeiro '
+        'são substituídos por um único slot combinado. '
+        '(3) Um predador (<i>lifeform = predador</i>) é avaliado em 13 campos — '
+        'ambos os campos de hospedeiro excluídos.', S['note']))
 
     story += [Paragraph('2.3  Fórmula de Completude', S['h2'])]
-    story.append(Paragraph('Para cada espécie:', S['body']))
+    story.append(Paragraph('Para cada espécie / subespécie:', S['body']))
     story.append(Paragraph(
         'completude (%) = (campos aplicáveis preenchidos) / (total de campos aplicáveis) × 100',
         S['code']))
     story.append(Paragraph(
-        'Os valores são então agregados por grupo taxonômico como média, mínimo e '
-        'máximo entre todas as espécies do grupo. A <b>amplitude</b> '
-        '(máx − mín) indica a heterogeneidade interna do grupo.', S['body']))
-
-    story += [Paragraph('2.4  Atribuição de Pesquisador', S['h2'])]
-    story.append(Paragraph(
-        'Cada linha agregada lista o pesquisador (<i>nome_completo</i>) '
-        'responsável pelo grupo. A busca percorre a hierarquia taxonômica a partir '
-        'do próprio rank da linha e sobe até encontrar um pesquisador responsável. '
-        'Quando o pesquisador é encontrado em rank superior ao da linha, a célula '
-        'é anotada com "(via &lt;rank&gt;)" para tornar a delegação visível.',
+        'Os valores são agregados por grupo taxonômico como média, mínimo e máximo. '
+        '<b>Amplitude</b> (máx − mín) mede a heterogeneidade interna do grupo.',
         S['body']))
 
-    story += [Paragraph('2.5  Arquivos de Saída', S['h2'])]
+    story += [Paragraph('2.4  Regra de Subespécies', S['h2'])]
+    story.append(Paragraph(
+        'Quando uma espécie possui pelo menos uma subespécie aceita '
+        '(<i>taxonrank = SUBESPECIE, taxonomicstatus = NOME_ACEITO</i>), a linha '
+        'da espécie é <b>excluída</b> da análise e suas subespécies aceitas são '
+        'usadas como unidades de análise. Isso garante que a completude seja medida '
+        'na resolução mais fina disponível para cada linhagem.', S['body']))
+
+    story += [Paragraph('2.5  Atribuição de Pesquisador', S['h2'])]
+    story.append(Paragraph(
+        'Cada linha agregada lista o pesquisador (<i>nome_completo</i>) responsável '
+        'pelo grupo. A busca começa no rank da própria linha e sobe na hierarquia '
+        'até encontrar um responsável. Quando resolvido em rank superior, a célula '
+        'é anotada com "(via &lt;rank&gt;)".', S['body']))
+
+    story += [Paragraph('2.6  Arquivos de Saída', S['h2'])]
     story.append(Paragraph('Os resultados são entregues em um arquivo ZIP contendo:', S['body']))
     story.append(output_table([
-        ('completeness.xlsx',  'Seis abas: by_species, by_family, by_order, by_class, by_subclass, by_phylum. Cada aba inclui colunas de contexto taxonômico, contagem de espécies, completude média/mínima/máxima, amplitude e pesquisador responsável.'),
-        ('by_family.pdf',      'Gráfico de barras horizontais de completude média por família, ordenado alfabeticamente, com barras de erro mín–máx. A família mais completa é destacada em vermelho.'),
-        ('by_order.pdf',       'Mesmo gráfico agregado por ordem.'),
-        ('by_class.pdf',       'Mesmo gráfico agregado por classe.'),
-        ('by_subclass.pdf',    'Mesmo gráfico agregado por subclasse (omitido se não houver dados de subclasse).'),
-        ('by_phylum.pdf',      'Mesmo gráfico agregado por filo (omitido em consultas de filo único).'),
-    ], S))
+        ('completeness_per_species.xlsx',
+         'Uma linha por espécie / subespécie: taxon_analisado, contexto taxonômico, '
+         'taxonrank, completude (%), filled_count, total_applicable, pesquisador.'),
+        ('completeness_by_genus.xlsx',
+         'Agregação por gênero (apenas quando o táxon de entrada é uma família): '
+         'n_spp_ctfb, completude média/mín/máx, amplitude, pesquisador.'),
+        ('completeness_by_family.xlsx',  'Agregação por família: mesmas colunas.'),
+        ('completeness_by_order.xlsx',   'Agregação por ordem.'),
+        ('completeness_by_class.xlsx',   'Agregação por classe.'),
+        ('completeness_by_subclass.xlsx','Agregação por subclasse (omitido se não houver dados).'),
+        ('completeness_by_phylum.xlsx',  'Agregação por filo (omitido em consultas de filo único).'),
+        ('completeness_histograms_genus.pdf',
+         'Gráfico de barras horizontais por gênero (apenas quando o táxon de entrada '
+         'é uma família), com barras de erro mín–máx.'),
+        ('completeness_histograms_family.pdf',
+         'Gráfico por família. A barra de maior média é destacada em vermelho.'),
+        ('completeness_histograms_order.pdf',    'Mesmo gráfico por ordem.'),
+        ('completeness_histograms_class.pdf',    'Mesmo gráfico por classe.'),
+        ('completeness_histograms_subclass.pdf', 'Mesmo gráfico por subclasse.'),
+        ('completeness_histograms_phylum.pdf',   'Mesmo gráfico por filo.'),
+    ], S, col1='Arquivo', col2='Conteúdo'))
 
-    # ── 3. Completude da Lista ─────────────────────────────────────────────────
+    # 3. Completude da Lista
     story += [PageBreak(), Paragraph('3. Completude da Lista de Espécies (GBIF)', S['h1']), rule()]
     story.append(Paragraph(
         'Esta análise compara a lista de espécies aceitas no CTFB com as espécies '
-        'registradas no Brasil no Global Biodiversity Information Facility (GBIF), '
-        'identificando espécies que ocorrem no Brasil mas estão ausentes do '
-        'catálogo. A análise é executada em segundo plano e o progresso é '
-        'exibido em tempo real na página de status.', S['body']))
+        'registradas no Brasil no GBIF, identificando espécies que ocorrem no Brasil '
+        'mas estão ausentes do catálogo. A análise é executada em segundo plano; '
+        'a página de status se atualiza automaticamente a cada 2 segundos.',
+        S['body']))
 
-    story += [Paragraph('3.1  Como Funciona', S['h2'])]
-    story.append(Paragraph('A análise é dividida em quatro fases:', S['body']))
-
-    phases_pt = [
+    story += [Paragraph('3.1  Como Funciona — Quatro Fases', S['h2'])]
+    for title, body in [
         ('Fase 1 — Resolução do táxon',
-         'O nome do táxon informado é resolvido para um identificador interno do '
-         'GBIF (<i>usageKey</i>) via a API GBIF Species Match '
+         'O nome do táxon é resolvido para um identificador interno do GBIF '
+         '(<i>usageKey</i>) via a API GBIF Species Match '
          '(api.gbif.org/v1/species/match). Um erro é retornado se o nome não for '
-         'encontrado.'),
+         'reconhecido.'),
         ('Fase 2 — Coleta de chaves de espécies',
-         'A API de Busca de Ocorrências do GBIF é consultada com os filtros '
-         'country=BR e taxonKey=&lt;chave resolvida&gt;, usando facetas no campo '
-         'speciesKey para recuperar a lista de todas as espécies com pelo menos '
-         'um registro de ocorrência no Brasil. A paginação é aplicada '
-         'automaticamente para táxons com mais de 50 000 espécies.'),
+         'A API de Busca de Ocorrências do GBIF é consultada com country=BR e '
+         'taxonKey=&lt;chave resolvida&gt;, usando facetas em speciesKey para '
+         'recuperar todas as espécies com pelo menos um registro no Brasil. '
+         'A paginação é aplicada automaticamente para táxons com mais de 50 000 '
+         'espécies.'),
         ('Fase 3 — Resolução de nomes',
-         'Cada chave de espécie é resolvida para um nome binomial canônico '
-         '(gênero + epíteto específico) e sua taxonomia superior (família, ordem, '
-         'classe, filo) via a API de Espécies do GBIF. Até 20 requisições '
-         'paralelas são feitas simultaneamente, respeitando o limite de taxa do '
-         'GBIF. Para táxons grandes, esta é a fase mais demorada.'),
+         'Cada chave de espécie é resolvida para um binômio canônico (gênero + '
+         'epíteto específico) e sua taxonomia superior via a API de Espécies do '
+         'GBIF. Até 20 requisições paralelas são feitas simultaneamente. '
+         'Espécies fósseis/extintas (<i>extinct = true</i> no GBIF) são excluídas '
+         'nesta fase.'),
         ('Fase 4 — Comparação com o CTFB',
-         'As espécies do CTFB com taxonomicstatus = NOME_ACEITO e '
-         'taxonrank = ESPECIE são extraídas e representadas como binômios '
-         'canônicos em minúsculas (gênero + specificepithet). Binômios do GBIF '
-         'não encontrados nesse conjunto são classificados como ausentes do '
-         'catálogo.'),
-    ]
-    for title, body in phases_pt:
-        story += [KeepTogether([
+         'As espécies do CTFB com <i>taxonomicstatus = NOME_ACEITO</i> e '
+         '<i>taxonrank = ESPECIE</i> são extraídas como binômios canônicos em '
+         'minúsculas. Cada binômio do GBIF é classificado como: <b>presente</b> '
+         '(corresponde a um nome aceito), <b>sinônimo</b> (corresponde a um '
+         'sinônimo no CTFB) ou <b>ausente</b> (não encontrado de nenhuma forma).'),
+    ]:
+        story.append(KeepTogether([
             Paragraph(f'<b>{title}</b>', S['h3']),
             Paragraph(body, S['body']),
-        ])]
+        ]))
 
     story += [Paragraph('3.2  Método de Correspondência e Ressalvas', S['h2'])]
     story.append(Paragraph(
-        'A correspondência é feita pelo <b>binômio canônico em minúsculas</b> '
-        '(gênero + specificEpithet). Isso significa:', S['body']))
-    for bullet in [
+        'A correspondência é feita pelo <b>binômio canônico em minúsculas</b>. '
+        'Pontos importantes:', S['body']))
+    for b in [
         'Espécies com binômios idênticos no GBIF e no CTFB são contadas como presentes, independentemente do autor ou ano.',
-        'Discrepâncias nomenclaturais — como sinonímia de gênero, variações ortográficas ou tratamentos taxonômicos diferentes — farão uma espécie aparecer como "ausente" mesmo que esteja representada sob outro nome no CTFB.',
-        'Táxons infraespecíficos (subespécies, variedades) são excluídos de ambos os lados da comparação.',
-        'Recomenda-se revisão manual da lista de lacunas, especialmente para grupos com instabilidade nomenclatural conhecida.',
+        'Um nome do GBIF que corresponde a um sinônimo (registro não-NOME_ACEITO) no CTFB é classificado em <i>Sinonimos_no_CTFB</i>, não como ausente.',
+        'Discrepâncias nomenclaturais — sinonímia de gênero, variações ortográficas, tratamentos taxonômicos distintos — farão uma espécie aparecer como "ausente" mesmo que esteja representada sob outro nome no CTFB. Recomenda-se revisão manual.',
+        'Táxons infraespecíficos (subespécies, variedades) são excluídos de ambos os lados.',
+        'Espécies fósseis são excluídas (<i>extinct = true</i> no GBIF).',
     ]:
-        story.append(Paragraph(f'• {bullet}', S['bullet']))
+        story.append(Paragraph(f'• {b}', S['bullet']))
 
     story += [Paragraph('3.3  Arquivo de Saída', S['h2'])]
-    story.append(Paragraph(
-        'Um único arquivo XLSX é gerado com três abas:', S['body']))
+    story.append(Paragraph('Um único arquivo XLSX com quatro abas:', S['body']))
     story.append(output_table([
-        ('Ausentes_no_CTFB',   'Todas as espécies GBIF (Brasil) ausentes no CTFB, ordenadas por filo → classe → ordem → família → nome. Colunas: phylum_gbif, classe_gbif, ordem_gbif, familia_gbif, nome_cientifico, gbif_species_key.'),
-        ('Resumo_por_Familia', 'Resumo por família: número de espécies GBIF ausentes do CTFB, total de espécies GBIF na família e percentual ausente. Ordenado pelo número de espécies ausentes (decrescente).'),
-        ('Presentes_no_CTFB',  'Espécies GBIF que foram correspondidas a um registro NOME_ACEITO no CTFB. Útil para verificação cruzada e compreensão da cobertura.'),
-    ], S))
+        ('Ausentes_no_CTFB',
+         'Espécies GBIF (Brasil, não-fósseis) ausentes do CTFB em qualquer forma. '
+         'Colunas: phylum_gbif, classe_gbif, ordem_gbif, familia_gbif, '
+         'nome_cientifico, gbif_species_key. Ordenado por filo → classe → ordem → família → nome.'),
+        ('Sinonimos_no_CTFB',
+         'Espécies GBIF cujo binômio corresponde a um sinônimo (não-NOME_ACEITO) no CTFB. '
+         'Mesmas colunas de Ausentes_no_CTFB.'),
+        ('Resumo_por_Familia',
+         'Resumo por família: total de espécies GBIF, ausentes, sinônimos e presentes. '
+         'Ordenado por número de ausentes (decrescente).'),
+        ('Presentes_no_CTFB',
+         'Espécies GBIF correspondidas a um registro NOME_ACEITO no CTFB. '
+         'Útil para verificação de cobertura.'),
+    ], S, col1='Aba', col2='Conteúdo'))
 
     story += [Paragraph('3.4  Tempo Estimado de Execução', S['h2'])]
-    time_data = [
+    story.append(time_table([
         [Paragraph('<b>Escala do táxon</b>', S['body']),
          Paragraph('<b>Espécies GBIF aprox.</b>', S['body']),
          Paragraph('<b>Tempo estimado</b>', S['body'])],
-        [Paragraph('Ordem pequena (ex: Nematomorpha)', S['body']),
-         Paragraph('< 200', S['body']),
-         Paragraph('10–30 segundos', S['body'])],
-        [Paragraph('Ordem média (ex: Araneae)', S['body']),
-         Paragraph('~5 000', S['body']),
-         Paragraph('2–5 minutos', S['body'])],
-        [Paragraph('Ordem grande (ex: Coleoptera)', S['body']),
-         Paragraph('~100 000', S['body']),
-         Paragraph('15–30 minutos', S['body'])],
-        [Paragraph('Filo completo (ex: Arthropoda)', S['body']),
-         Paragraph('> 200 000', S['body']),
-         Paragraph('1–3 horas', S['body'])],
-    ]
-    tt = Table(time_data, colWidths=[5.5*cm, 4.5*cm, 6*cm])
-    tt.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), BLUE_MID),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('TOPPADDING',    (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
-    story.append(tt)
+        [Paragraph('Ordem pequena (ex: Nematomorpha)', S['body']), Paragraph('< 200', S['body']),    Paragraph('10–30 segundos', S['body'])],
+        [Paragraph('Ordem média (ex: Araneae)',         S['body']), Paragraph('~5 000', S['body']),   Paragraph('2–5 minutos', S['body'])],
+        [Paragraph('Ordem grande (ex: Coleoptera)',     S['body']), Paragraph('~100 000', S['body']), Paragraph('15–30 minutos', S['body'])],
+        [Paragraph('Filo completo (ex: Arthropoda)',    S['body']), Paragraph('> 200 000', S['body']),Paragraph('1–3 horas', S['body'])],
+    ], S))
+    story.append(Spacer(1, 0.2*cm))
     story.append(Paragraph(
-        'A página de status se atualiza automaticamente a cada 2 segundos e exibe '
-        'uma barra de progresso. Você pode fechar a aba e retornar mais tarde; '
-        'o processo continua no servidor até a conclusão ou até o próximo '
-        'redeploy.', S['note']))
+        'Você pode fechar a aba e retornar mais tarde; o processo continua no '
+        'servidor até a conclusão ou o próximo redeploy.', S['note']))
 
-    # ── 4. Administração ───────────────────────────────────────────────────────
+    # 4. Administração
     story += [PageBreak(), Paragraph('4. Administração', S['h1']), rule()]
     story.append(Paragraph(
         'Contas de administrador têm acesso ao Painel Admin pelo link no rodapé '
@@ -920,92 +918,74 @@ def build_portuguese(path):
 
     story += [Paragraph('4.1  Gerenciamento de Usuários', S['h2'])]
     for item in [
-        ('<b>Importação em lote</b> — cole uma lista de logins da <i>pesquisadores.xlsx</i>. '
-         'Cada usuário é criado com o flag "deve definir senha no 1º acesso". '
-         'Usuários não encontrados na planilha são rejeitados.'),
-        ('<b>Adição individual</b> — crie um único usuário com senha imediatamente utilizável.'),
-        ('<b>Exportar CSV</b> — baixe um backup de todas as contas de usuário incluindo '
-         'senhas hasheadas. Recomendado antes de cada redeploy quando usando SQLite.'),
-        ('<b>Restaurar CSV</b> — reimporte usuários de um CSV exportado anteriormente. '
-         'Contas existentes são ignoradas; os hashes de senha são restaurados para '
-         'que os usuários não precisem redefinir suas senhas.'),
+        '<b>Importação em lote</b> — cole uma lista de logins da <i>pesquisadores.xlsx</i>. '
+        'Cada usuário é criado com o flag "deve definir senha". '
+        'Logins não encontrados na planilha são rejeitados.',
+        '<b>Adição individual</b> — crie um único usuário com senha imediatamente utilizável.',
+        '<b>Exportar CSV</b> — baixe um backup de todas as contas incluindo senhas hasheadas. '
+        'Recomendado antes de cada redeploy quando usando SQLite.',
+        '<b>Restaurar CSV</b> — reimporte usuários de um CSV exportado anteriormente. '
+        'Contas existentes são ignoradas; os hashes de senha são restaurados.',
+        '<b>Redefinir senha</b> — apaga a senha de um usuário e ativa o flag '
+        '"deve definir senha". No próximo acesso o usuário segue o fluxo do primeiro acesso.',
     ]:
         story.append(Paragraph(f'• {item}', S['bullet']))
 
     story += [Paragraph('4.2  Persistência do Banco de Dados', S['h2'])]
-    story.append(Paragraph('O sistema suporta dois backends de banco de dados:', S['body']))
-    db_data = [
+    story.append(db_table([
         [Paragraph('<b>Backend</b>', S['body']),
          Paragraph('<b>Persistência</b>', S['body']),
          Paragraph('<b>Como ativar</b>', S['body'])],
         [Paragraph('PostgreSQL', S['body']),
          Paragraph('Permanente — sobrevive a todos os redeployments.', S['body']),
-         Paragraph('Defina a variável de ambiente DATABASE_URL com uma string de conexão postgresql:// (ex: pelo Railway).', S['body'])],
+         Paragraph('Defina DATABASE_URL com uma string postgresql:// (ex: pelo Railway).', S['body'])],
         [Paragraph('SQLite', S['body']),
          Paragraph('Efêmero — dados perdidos a cada redeploy.', S['body']),
-         Paragraph('Padrão quando DATABASE_URL não está definida. Um banner de aviso é exibido no Painel Admin.', S['body'])],
-    ]
-    dbt = Table(db_data, colWidths=[3*cm, 4.5*cm, 8.5*cm])
-    dbt.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), BLUE_DARK),
-        ('TEXTCOLOR',  (0,0), (-1,0), colors.white),
-        ('FONTNAME',   (0,0), (-1,0), 'Helvetica-Bold'),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, GREY_LIGHT]),
-        ('GRID', (0,0), (-1,-1), 0.4, colors.HexColor('#dce1e7')),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('TOPPADDING',    (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING',   (0,0), (-1,-1), 6),
-    ]))
-    story.append(dbt)
+         Paragraph('Padrão quando DATABASE_URL não está definida. Um banner de aviso aparece no Painel Admin.', S['body'])],
+    ], S))
 
     story += [Paragraph('4.3  Fontes de Dados', S['h2'])]
     story.append(Paragraph(
-        'O sistema carrega duas planilhas do Google Sheets na inicialização. Se uma '
-        'planilha estiver inacessível (ex: sem conexão), o sistema usa arquivos '
-        'XLSX locais armazenados no diretório <i>data/</i> do servidor.', S['body']))
+        'O sistema carrega duas planilhas do Google Sheets na inicialização. Se '
+        'inacessíveis, usa arquivos XLSX locais no diretório <i>data/</i>.',
+        S['body']))
     story.append(output_table([
-        ('pesquisadores.xlsx',     'Cadastro de pesquisadores: login, nome_completo, táxons, institution. Controla a autorização de acesso e a atribuição de pesquisador nas tabelas de saída.'),
-        ('planilha_extendida.xlsx','Catálogo CTFB estendido com todos os campos Darwin Core e campos manuais. É a fonte de todos os cálculos de completude.'),
+        ('pesquisadores.xlsx',      'Cadastro de pesquisadores: login, nome_completo, táxons, institution. Controla autorização e atribuição de pesquisador.'),
+        ('planilha_extendida.xlsx', 'Catálogo CTFB estendido (Darwin Core + campos manuais). Fonte de todos os cálculos de completude.'),
     ], S, col1='Arquivo', col2='Conteúdo'))
 
-    # ── 5. Interpretação ───────────────────────────────────────────────────────
+    # 5. Interpretação
     story += [PageBreak(), Paragraph('5. Interpretando os Resultados', S['h1']), rule()]
 
-    story += [Paragraph('5.1  Gráficos de Completude dos Dados', S['h2'])]
+    story += [Paragraph('5.1  Gráficos de Completude', S['h2'])]
     story.append(Paragraph(
-        'Cada gráfico PDF exibe uma barra horizontal por grupo taxonômico. O '
-        'comprimento da barra representa a completude média (%). As barras de '
-        'erro se estendem até os valores mínimo e máximo do grupo. A barra com '
-        'a maior média é colorida em vermelho; as demais são azuis. Os valores '
-        'são anotados à direita de cada barra.', S['body']))
+        'Cada PDF exibe uma barra horizontal por grupo taxonômico. O comprimento '
+        'da barra representa a completude média (%). As barras de erro se estendem '
+        'até os valores mínimo e máximo do grupo. A barra de maior média é colorida '
+        'em vermelho; as demais são azuis. Os valores são anotados à direita.',
+        S['body']))
     story.append(Paragraph(
-        'Um grupo com 100% de média e amplitude zero está perfeitamente '
-        'homogêneo — todas as espécies têm todos os campos aplicáveis '
-        'preenchidos. Uma amplitude grande indica que algumas espécies são '
-        'bem documentadas enquanto outras carecem de muitos campos, sinalizando '
-        'onde o esforço curatorial deve ser concentrado.', S['body']))
+        'Um grupo com 100% de média e amplitude zero está perfeitamente homogêneo. '
+        'Uma amplitude grande indica que algumas espécies são bem documentadas '
+        'enquanto outras carecem de muitos campos — sinalizando onde concentrar '
+        'o esforço curatorial.', S['body']))
 
     story += [Paragraph('5.2  Lista de Lacunas de Espécies', S['h2'])]
     story.append(Paragraph(
         'A aba <i>Ausentes_no_CTFB</i> lista espécies candidatas à inclusão no '
-        'catálogo. Antes de agir sobre um registro, sempre considere:', S['body']))
-    for bullet in [
-        'Diferenças nomenclaturais — a espécie pode já estar no CTFB sob um binômio diferente (mas sinônimo).',
-        'Escopo taxonômico — as ocorrências do GBIF incluem registros de todos os ambientes; algumas espécies podem ser marinhas e estar fora do escopo atual de cobertura do CTFB.',
-        'Qualidade dos registros — alguns registros do GBIF são identificações incorretas ou carecem de precisão de coordenadas. Registros de alta incerteza devem ser verificados.',
-        'Táxons infraespecíficos — a análise abrange apenas o nível de espécie; subespécies ausentes do CTFB não são sinalizadas.',
+        'catálogo. Antes de agir sobre um registro, considere:', S['body']))
+    for b in [
+        'Diferenças nomenclaturais — a espécie pode já estar no CTFB sob um binômio sinônimo (verifique primeiro a aba <i>Sinonimos_no_CTFB</i>).',
+        'Escopo taxonômico — alguns registros do GBIF podem referir-se a espécies marinhas fora do escopo atual do CTFB.',
+        'Qualidade dos registros — alguns registros do GBIF são identificações incorretas ou carecem de precisão geográfica. Registros de alta incerteza devem ser verificados.',
+        'Táxons infraespecíficos — a comparação com o GBIF abrange apenas o nível de espécie.',
     ]:
-        story.append(Paragraph(f'• {bullet}', S['bullet']))
+        story.append(Paragraph(f'• {b}', S['bullet']))
 
-    # ── Rodapé ─────────────────────────────────────────────────────────────────
     story += [
-        Spacer(1, 1.5*cm),
-        section_rule(),
-        Paragraph(
-            'Problemas ou dúvidas? Escreva para '
-            '<font name="Courier">faunadobrasilctfb@gmail.com</font>',
-            S['footer']),
+        Spacer(1, 1.5*cm), section_rule(),
+        Paragraph('Problemas ou dúvidas? Escreva para '
+                  '<font name="Courier">faunadobrasilctfb@gmail.com</font>', S['footer']),
         Spacer(1, 0.15*cm),
         Paragraph('Porcentômetro · CTFB · Abril de 2026 · Edição em português', S['footer']),
     ]
