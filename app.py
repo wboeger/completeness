@@ -929,6 +929,53 @@ def admin_dashboard():
                            username=User.query.get(session['user_id']).username,
                            is_admin=True, using_postgres=_USING_POSTGRES)
 
+@app.route('/admin/upload_data', methods=['POST'])
+def upload_data():
+    """Admin: upload pesquisadores.xlsx and/or planilha_extendida.xlsx directly."""
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+
+    os.makedirs(os.path.join(app.root_path, 'data'), exist_ok=True)
+    uploaded = []
+    errors   = []
+
+    for field, filename in [('pesquisadores',     'pesquisadores.xlsx'),
+                             ('planilha_extendida','planilha_extendida.xlsx')]:
+        f = request.files.get(field)
+        if f and f.filename:
+            dest = os.path.join(app.root_path, 'data', filename)
+            try:
+                f.save(dest)
+                uploaded.append(filename)
+            except Exception as e:
+                errors.append(f'{filename}: {e}')
+
+    if uploaded:
+        load_data_on_startup()
+        flash(f'Arquivo(s) carregado(s): {", ".join(uploaded)}. Dados recarregados.', 'success')
+    if errors:
+        flash(f'Erro ao salvar: {"; ".join(errors)}', 'danger')
+    if not uploaded and not errors:
+        flash('Nenhum arquivo enviado.', 'info')
+
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/reload_data', methods=['POST'])
+def reload_data():
+    """Admin: retry loading data from Google Drive."""
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    load_data_on_startup()
+    if DATA_LOADED_SUCCESSFULLY:
+        flash('Dados recarregados com sucesso.', 'success')
+    else:
+        flash('Falha ao recarregar — verifique a conectividade com o Google Drive e os arquivos locais.', 'danger')
+    return redirect(url_for('admin_dashboard'))
+
+
 @app.route('/admin/export_users')
 def export_users():
     """Download a CSV of all users so admins can restore after a SQLite wipe."""

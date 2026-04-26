@@ -62,6 +62,33 @@
             {% endif %}
         {% endwith %}
 
+        <h3>Dados do sistema</h3>
+        <div style="background:#f4f6f9; border:1px solid #dce1e7; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem; font-size:.92rem;">
+            <p style="margin:0 0 .6rem;"><strong>Planilhas de dados</strong> — carregadas do Google Drive na inicialização.
+            Se o carregamento falhar (arquivos em vermelho na página principal), use as opções abaixo.</p>
+            <form method="POST" action="{{ url_for('upload_data') }}" enctype="multipart/form-data"
+                  style="display:flex; flex-wrap:wrap; gap:.8rem; align-items:flex-end; margin-bottom:.8rem;">
+                <div>
+                    <label style="font-size:.85rem; font-weight:600; display:block; margin-bottom:.2rem;">pesquisadores.xlsx</label>
+                    <input type="file" name="pesquisadores" accept=".xlsx">
+                </div>
+                <div>
+                    <label style="font-size:.85rem; font-weight:600; display:block; margin-bottom:.2rem;">planilha_extendida.xlsx</label>
+                    <input type="file" name="planilha_extendida" accept=".xlsx">
+                </div>
+                <button type="submit" style="background:#2980b9; color:white; border:none; padding:.45rem 1.1rem;
+                        border-radius:4px; font-weight:600; cursor:pointer; font-size:.9rem;">
+                    Enviar arquivo(s)
+                </button>
+            </form>
+            <form method="POST" action="{{ url_for('reload_data') }}" style="display:inline;">
+                <button type="submit" style="background:#7f8c8d; color:white; border:none; padding:.4rem 1rem;
+                        border-radius:4px; font-size:.85rem; cursor:pointer;">
+                    ↻ Tentar recarregar do Google Drive
+                </button>
+            </form>
+        </div>
+
         <h3>Usuários</h3>
         <table>
             <thead>
