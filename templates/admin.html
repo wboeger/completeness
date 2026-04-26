@@ -6,6 +6,8 @@
     <title>Admin Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
+        body { align-items: flex-start; padding: 2rem 1rem; }
+        .container { max-width: 860px; }
         .alert-sqlite {
             background: #fff3cd; color: #856404; border: 1px solid #ffc107;
             border-radius: 6px; padding: .8rem 1.2rem; margin-bottom: 1.2rem;
@@ -63,24 +65,41 @@
         {% endwith %}
 
         <h3>Dados do sistema</h3>
-        <div style="background:#f4f6f9; border:1px solid #dce1e7; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem; font-size:.92rem;">
-            <p style="margin:0 0 .6rem;"><strong>Planilhas de dados</strong> — carregadas do Google Drive na inicialização.
-            Se o carregamento falhar (arquivos em vermelho na página principal), use as opções abaixo.</p>
-            <form method="POST" action="{{ url_for('upload_data') }}" enctype="multipart/form-data"
-                  style="display:flex; flex-wrap:wrap; gap:.8rem; align-items:flex-end; margin-bottom:.8rem;">
-                <div>
-                    <label style="font-size:.85rem; font-weight:600; display:block; margin-bottom:.2rem;">pesquisadores.xlsx</label>
-                    <input type="file" name="pesquisadores" accept=".xlsx">
-                </div>
-                <div>
-                    <label style="font-size:.85rem; font-weight:600; display:block; margin-bottom:.2rem;">planilha_extendida.xlsx</label>
-                    <input type="file" name="planilha_extendida" accept=".xlsx">
-                </div>
-                <button type="submit" style="background:#2980b9; color:white; border:none; padding:.45rem 1.1rem;
-                        border-radius:4px; font-weight:600; cursor:pointer; font-size:.9rem;">
-                    Enviar arquivo(s)
-                </button>
+        <div style="background:#f4f6f9; border:1px solid #dce1e7; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
+            <p style="margin:0 0 .8rem; font-size:.92rem;">
+                <strong>Planilhas de dados</strong> — carregadas do Google Drive na inicialização.
+                Se o carregamento falhar (indicador vermelho), faça o upload manual abaixo.
+            </p>
+            <form method="POST" action="{{ url_for('upload_data') }}" enctype="multipart/form-data">
+                <table style="border:none; width:auto; font-size:.9rem;">
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            pesquisadores.xlsx
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="file" name="pesquisadores" accept=".xlsx" style="font-size:.9rem;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            planilha_extendida.xlsx
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="file" name="planilha_extendida" accept=".xlsx" style="font-size:.9rem;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="border:none; padding:.6rem 0 0 0;">
+                            <button type="submit" style="background:#2980b9; color:white; border:none;
+                                    padding:.5rem 1.3rem; border-radius:4px; font-weight:600;
+                                    cursor:pointer; font-size:.9rem;">
+                                Enviar arquivo(s)
+                            </button>
+                        </td>
+                    </tr>
+                </table>
             </form>
+            <hr style="margin:.8rem 0; border:none; border-top:1px solid #dce1e7;">
             <form method="POST" action="{{ url_for('reload_data') }}" style="display:inline;">
                 <button type="submit" style="background:#7f8c8d; color:white; border:none; padding:.4rem 1rem;
                         border-radius:4px; font-size:.85rem; cursor:pointer;">
