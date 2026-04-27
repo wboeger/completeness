@@ -533,51 +533,108 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 
         filled_matrix = species_data[manual_present].apply(is_filled)
 
-        # --- Ecological exclusion vectors ---
+        # --- Ecological exclusion vectors (regras.txt) ---
         env_lower = pd.Series('', index=species_data.index)
         if 'environment' in species_data.columns:
             env_lower = species_data['environment'].fillna('').str.lower().str.strip()
 
         is_epicontinental = env_lower == "epicontinental"
         is_marine         = env_lower == "marinho"
+        is_vazio          = env_lower == "vazio"
+        is_null_env       = env_lower == ""
 
         lifeform_lower = pd.Series('', index=species_data.index)
         if 'lifeform' in species_data.columns:
             lifeform_lower = species_data['lifeform'].fillna('').str.lower().str.strip()
 
-        PARASITE_FORMS = {"endoparasito", "ectoparasito", "epibionte"}
-        is_parasite  = lifeform_lower.isin(PARASITE_FORMS)
-        is_herbivore = lifeform_lower == "herbivoro"
+        # Use str.contains to handle compound values like "herbivoro;vida livre individual"
+        is_parasite   = lifeform_lower.str.contains(r'endoparasito|ectoparasito', regex=True, na=False)
+        is_vida_livre = lifeform_lower.str.contains('vida livre individual', na=False) & ~is_parasite
+        is_herbivore  = lifeform_lower.str.contains('herbivoro', na=False) & ~is_parasite & ~is_vida_livre
+        is_empty_lf   = lifeform_lower == ''
+        # "other" lifeforms: anything not matching above categories → both host cols apply
+        is_other_lf   = ~is_parasite & ~is_vida_livre & ~is_herbivore & ~is_empty_lf
 
         # --- Adjust numerator and denominator ---
         filled_count = filled_matrix.sum(axis=1).copy().astype(float)
         species_data['total_applicable'] = float(len(manual_present))
 
-        # environment = "epicontinental" → exclude marinedomain
-        if 'marinedomain' in manual_present:
+        # Rule: environment = "vazio" → treat environment as not filled (subtract from numerator)
+        if 'environment' in manual_present:
+            filled_count -= (is_vazio & filled_matrix['environment']).astype(float)
+
+        # Rule: endemicbrazil = "SIM" → exclude 'country' from denominator
+        endemic_sim = pd.Series(False, index=species_data.index)
+        if 'endemicbrazil' in species_data.columns:
+            endemic_sim = species_data['endemicbrazil'].fillna('').str.strip().str.upper() == 'SIM'
+        if 'country' in manual_present:
+            filled_count -= (endemic_sim & filled_matrix['country']).astype(float)
+            species_data.loc[endemic_sim, 'total_applicable'] -= 1.0
+
+        # Domain rule: always keep exactly ONE domain column per species.
+        # epicontinental → exclude marinedomain
+        # marinho        → exclude epicontinentaldomain
+        # vazio or null  → exclude whichever domain is NOT filled (prefer to keep the filled one)
+        epi_in    = 'epicontinentaldomain' in manual_present
+        marine_in = 'marinedomain' in manual_present
+        if epi_in and marine_in:
+            # epicontinental: exclude marinedomain
+            filled_count -= (is_epicontinental & filled_matrix['marinedomain']).astype(float)
+            species_data.loc[is_epicontinental, 'total_applicable'] -= 1.0
+            # marinho: exclude epicontinentaldomain
+            filled_count -= (is_marine & filled_matrix['epicontinentaldomain']).astype(float)
+            species_data.loc[is_marine, 'total_applicable'] -= 1.0
+            # vazio or null env: exclude the domain that is NOT filled; if both or neither, exclude marinedomain
+            ambiguous = is_vazio | is_null_env
+            epi_filled    = filled_matrix['epicontinentaldomain']
+            marine_filled = filled_matrix['marinedomain']
+            # keep epicontinentaldomain → exclude marinedomain (when epi filled and marine not, or neither)
+            keep_epi = ambiguous & (epi_filled | ~marine_filled)
+            # keep marinedomain → exclude epicontinentaldomain (only when marine filled and epi not)
+            keep_marine = ambiguous & marine_filled & ~epi_filled
+            filled_count -= (keep_epi & marine_filled).astype(float)
+            species_data.loc[keep_epi, 'total_applicable'] -= 1.0
+            filled_count -= (keep_marine & epi_filled).astype(float)
+            species_data.loc[keep_marine, 'total_applicable'] -= 1.0
+        elif epi_in and not marine_in:
+            # only epicontinentaldomain present: marinho species exclude it
+            filled_count -= (is_marine & filled_matrix['epicontinentaldomain']).astype(float)
+            species_data.loc[is_marine, 'total_applicable'] -= 1.0
+        elif marine_in and not epi_in:
+            # only marinedomain present: epicontinental species exclude it
             filled_count -= (is_epicontinental & filled_matrix['marinedomain']).astype(float)
             species_data.loc[is_epicontinental, 'total_applicable'] -= 1.0
 
-        # environment = "marinho" → exclude epicontinentaldomain
-        if 'epicontinentaldomain' in manual_present:
-            filled_count -= (is_marine & filled_matrix['epicontinentaldomain']).astype(float)
-            species_data.loc[is_marine, 'total_applicable'] -= 1.0
-
-        # Host column rules (applied after stripping both columns from everyone):
-        #   parasites/epibiontes → 1 combined slot (OR of both host columns)
-        #   herbivores           → vegetalhostnames counts; animalhostnames excluded
-        #   all others           → both host columns excluded
+        # Host column rules (regras.txt Section 4 — Trophic Rules):
+        #   empty lifeform   → exclude both host columns
+        #   vida livre       → exclude both host columns
+        #   herbivore        → exclude animalhostnames only (vegetalhostnames counts)
+        #   parasite         → 1 combined slot (animal OR vegetal)
+        #   other lifeforms  → both host columns count normally
         animal_in = 'animalhostnames' in manual_present
         vegetal_in = 'vegetalhostnames' in manual_present
         if animal_in or vegetal_in:
-            # Strip both columns from everyone
+            # Strip both columns from everyone first
             if animal_in:
                 filled_count -= filled_matrix['animalhostnames'].astype(float)
             if vegetal_in:
                 filled_count -= filled_matrix['vegetalhostnames'].astype(float)
             species_data['total_applicable'] -= float(int(animal_in) + int(vegetal_in))
 
-            # Parasites/epibiontes: 1 combined slot
+            # Other lifeforms: add both back
+            if animal_in:
+                species_data.loc[is_other_lf, 'total_applicable'] += 1.0
+                filled_count += is_other_lf.astype(float) * filled_matrix['animalhostnames'].astype(float)
+            if vegetal_in:
+                species_data.loc[is_other_lf, 'total_applicable'] += 1.0
+                filled_count += is_other_lf.astype(float) * filled_matrix['vegetalhostnames'].astype(float)
+
+            # Herbivores: add back vegetalhostnames only
+            if vegetal_in:
+                species_data.loc[is_herbivore, 'total_applicable'] += 1.0
+                filled_count += is_herbivore.astype(float) * filled_matrix['vegetalhostnames'].astype(float)
+
+            # Parasites: 1 combined slot
             if animal_in and vegetal_in:
                 host_filled = (filled_matrix['animalhostnames'] | filled_matrix['vegetalhostnames']).astype(float)
             elif animal_in:
@@ -586,11 +643,6 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 host_filled = filled_matrix['vegetalhostnames'].astype(float)
             species_data.loc[is_parasite, 'total_applicable'] += 1.0
             filled_count += is_parasite.astype(float) * host_filled
-
-            # Herbivores: add back vegetalhostnames slot only
-            if vegetal_in:
-                species_data.loc[is_herbivore, 'total_applicable'] += 1.0
-                filled_count += is_herbivore.astype(float) * filled_matrix['vegetalhostnames'].astype(float)
 
         species_data['filled_count'] = filled_count.values
         species_data['completeness'] = (species_data['filled_count'] / species_data['total_applicable']) * 100
@@ -807,6 +859,29 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
         print("Default admin user 'admin' created.")
+
+    # Seed users from users_backup.csv (only inserts users that don't exist yet)
+    _seed_csv = os.path.join(os.path.dirname(__file__), 'users_backup.csv')
+    if os.path.exists(_seed_csv):
+        import csv as _csv
+        _seeded = 0
+        with open(_seed_csv, newline='', encoding='utf-8') as _f:
+            for _row in _csv.DictReader(_f):
+                _uname = (_row.get('username') or '').strip()
+                if not _uname:
+                    continue
+                if User.query.filter_by(username=_uname).first() is None:
+                    _u = User(
+                        username=_uname,
+                        is_admin=str(_row.get('is_admin', '0')).strip() in ('1', 'True', 'true'),
+                        must_set_password=str(_row.get('must_set_password', '0')).strip() in ('1', 'True', 'true'),
+                        password_hash=_row.get('password_hash') or None,
+                    )
+                    db.session.add(_u)
+                    _seeded += 1
+        if _seeded:
+            db.session.commit()
+            print(f"[DB] Seeded {_seeded} user(s) from users_backup.csv.")
 
 @app.route('/')
 def index():
