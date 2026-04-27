@@ -312,19 +312,29 @@ def build_english(path):
     story.append(Paragraph(
         'Certain fields are excluded from both the numerator and the denominator '
         'when they are biologically inapplicable. The applicable denominator therefore '
-        'varies per species.', S['body']))
+        'varies per species. Lifeform detection uses substring matching to handle '
+        'compound values (e.g. <font name="Courier" size="9">herbivoro;vida livre individual</font>).', S['body']))
 
-    story += [Paragraph('Domain fields', S['h3'])]
+    story += [Paragraph('Domain and country fields', S['h3'])]
     story.append(excl_table([
         [Paragraph('<b>Field excluded</b>', S['body']),
          Paragraph('<b>Condition</b>', S['body']),
          Paragraph('<b>Rationale</b>', S['body'])],
         [Paragraph('<font name="Courier" size="8.5">marinedomain</font>', S['body']),
          Paragraph('environment = <i>epicontinental</i>', S['body']),
-         Paragraph('A freshwater / terrestrial species has no marine biogeographic province.', S['body'])],
+         Paragraph('A freshwater/terrestrial species has no marine biogeographic province.', S['body'])],
         [Paragraph('<font name="Courier" size="8.5">epicontinentaldomain</font>', S['body']),
          Paragraph('environment = <i>marinho</i>', S['body']),
          Paragraph('A strictly marine species has no continental phytogeographic domain.', S['body'])],
+        [Paragraph('one of the two domain fields', S['body']),
+         Paragraph('environment = <i>vazio</i> or blank', S['body']),
+         Paragraph('Always exactly ONE domain slot per species. For unknown environment, '
+                   'the filled domain is kept; if both or neither are filled, '
+                   '<i>marinedomain</i> is dropped by default. '
+                   'Additionally, <i>environment</i> itself is treated as not filled when its value is "vazio".', S['body'])],
+        [Paragraph('<font name="Courier" size="8.5">country</font>', S['body']),
+         Paragraph('endemicbrazil = <i>SIM</i>', S['body']),
+         Paragraph('Species endemic to Brazil always occur in Brazil — the field adds no information.', S['body'])],
     ], S))
     story.append(Spacer(1, 0.25*cm))
 
@@ -332,25 +342,28 @@ def build_english(path):
     story.append(Paragraph(
         'The treatment of <font name="Courier" size="9">animalhostnames</font> and '
         '<font name="Courier" size="9">vegetalhostnames</font> depends on the '
-        '<font name="Courier" size="9">lifeform</font> value:', S['body']))
+        '<font name="Courier" size="9">lifeform</font> value (substring match applied '
+        'to handle compound lifeform strings):', S['body']))
 
     host_data = [
         [Paragraph('<b>lifeform value</b>', S['body']),
          Paragraph('<b>Treatment</b>', S['body'])],
-        [Paragraph('<i>endoparasito, ectoparasito,</i> or <i>epibionte</i>', S['body']),
+        [Paragraph('contains <i>endoparasito</i> or <i>ectoparasito</i>', S['body']),
          Paragraph('Both columns are merged into <b>one combined host slot</b>. '
                    'The slot counts as filled if <i>either</i> column is non-empty; '
-                   'it counts as blank if both are empty. The denominator gains 1 '
-                   '(not 2) for these species.', S['body'])],
-        [Paragraph('<i>herbívoro</i>', S['body']),
+                   'blank if both are empty. The denominator gains 1 (not 2).', S['body'])],
+        [Paragraph('contains <i>herbivoro</i> (non-parasite)', S['body']),
          Paragraph('<font name="Courier" size="8.5">animalhostnames</font> is excluded '
-                   '(herbivores feed on plants, not animals). '
-                   '<font name="Courier" size="8.5">vegetalhostnames</font> is '
-                   'evaluated normally.', S['body'])],
-        [Paragraph('Any other value (or blank)', S['body']),
+                   '(herbivores feed on plants). '
+                   '<font name="Courier" size="8.5">vegetalhostnames</font> is evaluated normally.', S['body'])],
+        [Paragraph('contains <i>vida livre individual</i> (non-parasite)', S['body']),
+         Paragraph('Both host columns are excluded — free-living species do not have hosts.', S['body'])],
+        [Paragraph('blank / not filled', S['body']),
+         Paragraph('Both host columns are excluded — lifeform unknown, host relationship undefined.', S['body'])],
+        [Paragraph('any other value (e.g. <i>predador, colonial, sessil</i>)', S['body']),
          Paragraph('Both <font name="Courier" size="8.5">animalhostnames</font> and '
                    '<font name="Courier" size="8.5">vegetalhostnames</font> are '
-                   'excluded from the denominator.', S['body'])],
+                   '<b>included normally</b> in the denominator.', S['body'])],
     ]
     ht = Table(host_data, colWidths=[5*cm, 11*cm])
     ht.setStyle(_grid_style(BLUE_MID))
@@ -361,8 +374,11 @@ def build_english(path):
         'Examples: (1) A freshwater beetle (<i>environment = epicontinental</i>) is '
         'scored over 14 fields — <i>marinedomain</i> removed. (2) An endoparasite '
         'is scored over 14 fields — the two host columns are replaced by one combined '
-        'slot. (3) A predator (<i>lifeform = predador</i>) is scored over 13 fields '
-        '— both host columns excluded.', S['note']))
+        'slot. (3) A free-living predator (<i>lifeform = predador</i>) is scored over '
+        '15 fields — both host columns count normally. (4) A species with '
+        '<i>lifeform = vida livre individual</i> is scored over 13 fields — both host '
+        'columns excluded. (5) A Brazilian endemic (<i>endemicbrazil = SIM</i>) is '
+        'scored over one fewer field — <i>country</i> removed.', S['note']))
 
     story += [Paragraph('2.3  Completeness Formula', S['h2'])]
     story.append(Paragraph('For each species / subspecies the score is:', S['body']))
@@ -514,13 +530,20 @@ def build_english(path):
         'Usernames not found in the spreadsheet are rejected.',
         '<b>Individual add</b> — create a single user with an immediately usable password.',
         '<b>Export CSV</b> — download a backup of all user accounts including hashed passwords. '
-        'Recommended before every redeployment when using SQLite.',
+        'Commit this file (<i>users_backup.csv</i>) to the repository before every redeployment '
+        'so that users are automatically restored on startup.',
         '<b>Restore CSV</b> — re-import users from a previously exported CSV. '
         'Existing accounts are skipped; hashed passwords are restored.',
         '<b>Reset password</b> — clears a user\'s password and sets the '
         '"must set password" flag. The user follows the first-access flow on next login.',
     ]:
         story.append(Paragraph(f'• {item}', S['bullet']))
+    story.append(Paragraph(
+        '<b>Automatic seed on startup:</b> at every startup the application reads '
+        '<font name="Courier">users_backup.csv</font> from the project root and inserts '
+        'any user that does not yet exist in the database (existing accounts and passwords '
+        'are never overwritten). Export and commit this file after adding or changing users '
+        'to guarantee they survive redeployments.', S['note']))
 
     story += [Paragraph('4.2  Database Persistence', S['h2'])]
     story.append(db_table([
@@ -720,10 +743,12 @@ def build_portuguese(path):
     story += [Spacer(1, 0.4*cm), Paragraph('2.2  Regras de Exclusão Ecológica', S['h2'])]
     story.append(Paragraph(
         'Determinados campos são excluídos do numerador e do denominador quando '
-        'são biologicamente inaplicáveis. O denominador efetivo varia por espécie.',
+        'são biologicamente inaplicáveis. O denominador efetivo varia por espécie. '
+        'A detecção de lifeform usa correspondência por substring para lidar com '
+        'valores compostos (ex: <font name="Courier" size="9">herbivoro;vida livre individual</font>).',
         S['body']))
 
-    story += [Paragraph('Campos de domínio geográfico', S['h3'])]
+    story += [Paragraph('Campos de domínio geográfico e país', S['h3'])]
     story.append(excl_table([
         [Paragraph('<b>Campo excluído</b>', S['body']),
          Paragraph('<b>Condição</b>', S['body']),
@@ -734,6 +759,16 @@ def build_portuguese(path):
         [Paragraph('<font name="Courier" size="8.5">epicontinentaldomain</font>', S['body']),
          Paragraph('environment = <i>marinho</i>', S['body']),
          Paragraph('Espécies estritamente marinhas não possuem domínio fitogeográfico continental.', S['body'])],
+        [Paragraph('um dos dois campos de domínio', S['body']),
+         Paragraph('environment = <i>vazio</i> ou em branco', S['body']),
+         Paragraph('Sempre exatamente UM slot de domínio por espécie. Para ambiente desconhecido, '
+                   'mantém o domínio que estiver preenchido; se ambos ou nenhum estiver preenchido, '
+                   '<i>marinedomain</i> é removido por padrão. '
+                   'Além disso, o próprio campo <i>environment</i> é tratado como não preenchido '
+                   'quando seu valor é "vazio".', S['body'])],
+        [Paragraph('<font name="Courier" size="8.5">country</font>', S['body']),
+         Paragraph('endemicbrazil = <i>SIM</i>', S['body']),
+         Paragraph('Espécies endêmicas do Brasil sempre ocorrem no Brasil — o campo não acrescenta informação.', S['body'])],
     ], S))
     story.append(Spacer(1, 0.25*cm))
 
@@ -741,25 +776,28 @@ def build_portuguese(path):
     story.append(Paragraph(
         'O tratamento de <font name="Courier" size="9">animalhostnames</font> e '
         '<font name="Courier" size="9">vegetalhostnames</font> depende do valor de '
-        '<font name="Courier" size="9">lifeform</font>:', S['body']))
+        '<font name="Courier" size="9">lifeform</font> (correspondência por substring '
+        'aplicada para lidar com valores compostos):', S['body']))
 
     host_data_pt = [
         [Paragraph('<b>Valor de lifeform</b>', S['body']),
          Paragraph('<b>Tratamento</b>', S['body'])],
-        [Paragraph('<i>endoparasito, ectoparasito</i> ou <i>epibionte</i>', S['body']),
+        [Paragraph('contém <i>endoparasito</i> ou <i>ectoparasito</i>', S['body']),
          Paragraph('Os dois campos são fundidos em <b>um único slot de hospedeiro</b>. '
-                   'O slot é considerado preenchido se <i>qualquer um</i> dos campos '
-                   'não estiver vazio; vazio se ambos estiverem em branco. '
-                   'O denominador ganha 1 slot (não 2).', S['body'])],
-        [Paragraph('<i>herbívoro</i>', S['body']),
+                   'O slot é preenchido se <i>qualquer um</i> não estiver vazio; '
+                   'vazio se ambos estiverem em branco. O denominador ganha 1 slot (não 2).', S['body'])],
+        [Paragraph('contém <i>herbivoro</i> (não-parasito)', S['body']),
          Paragraph('<font name="Courier" size="8.5">animalhostnames</font> é excluído '
-                   '(herbívoros se alimentam de plantas, não de animais). '
-                   '<font name="Courier" size="8.5">vegetalhostnames</font> é '
-                   'avaliado normalmente.', S['body'])],
-        [Paragraph('Qualquer outro valor (ou em branco)', S['body']),
+                   '(herbívoros se alimentam de plantas). '
+                   '<font name="Courier" size="8.5">vegetalhostnames</font> é avaliado normalmente.', S['body'])],
+        [Paragraph('contém <i>vida livre individual</i> (não-parasito)', S['body']),
+         Paragraph('Ambos os campos de hospedeiro são excluídos — espécies de vida livre não possuem hospedeiros.', S['body'])],
+        [Paragraph('em branco / não preenchido', S['body']),
+         Paragraph('Ambos os campos de hospedeiro são excluídos — lifeform desconhecido, relação com hospedeiro indefinida.', S['body'])],
+        [Paragraph('qualquer outro valor (ex: <i>predador, colonial, sessil</i>)', S['body']),
          Paragraph('Ambos <font name="Courier" size="8.5">animalhostnames</font> e '
                    '<font name="Courier" size="8.5">vegetalhostnames</font> são '
-                   'excluídos do denominador.', S['body'])],
+                   '<b>incluídos normalmente</b> no denominador.', S['body'])],
     ]
     ht_pt = Table(host_data_pt, colWidths=[5*cm, 11*cm])
     ht_pt.setStyle(_grid_style(BLUE_MID))
@@ -771,8 +809,12 @@ def build_portuguese(path):
         'é avaliado em 14 campos — <i>marinedomain</i> removido. '
         '(2) Um endoparasito é avaliado em 14 campos — os dois campos de hospedeiro '
         'são substituídos por um único slot combinado. '
-        '(3) Um predador (<i>lifeform = predador</i>) é avaliado em 13 campos — '
-        'ambos os campos de hospedeiro excluídos.', S['note']))
+        '(3) Um predador de vida livre (<i>lifeform = predador</i>) é avaliado em '
+        '15 campos — ambos os campos de hospedeiro contam normalmente. '
+        '(4) Uma espécie com <i>lifeform = vida livre individual</i> é avaliada em '
+        '13 campos — ambos os campos de hospedeiro excluídos. '
+        '(5) Um endêmico do Brasil (<i>endemicbrazil = SIM</i>) é avaliado em um '
+        'campo a menos — <i>country</i> removido.', S['note']))
 
     story += [Paragraph('2.3  Fórmula de Completude', S['h2'])]
     story.append(Paragraph('Para cada espécie / subespécie:', S['body']))
@@ -923,13 +965,20 @@ def build_portuguese(path):
         'Logins não encontrados na planilha são rejeitados.',
         '<b>Adição individual</b> — crie um único usuário com senha imediatamente utilizável.',
         '<b>Exportar CSV</b> — baixe um backup de todas as contas incluindo senhas hasheadas. '
-        'Recomendado antes de cada redeploy quando usando SQLite.',
+        'Faça commit deste arquivo (<i>users_backup.csv</i>) no repositório antes de cada '
+        'redeploy para que os usuários sejam restaurados automaticamente na inicialização.',
         '<b>Restaurar CSV</b> — reimporte usuários de um CSV exportado anteriormente. '
         'Contas existentes são ignoradas; os hashes de senha são restaurados.',
         '<b>Redefinir senha</b> — apaga a senha de um usuário e ativa o flag '
         '"deve definir senha". No próximo acesso o usuário segue o fluxo do primeiro acesso.',
     ]:
         story.append(Paragraph(f'• {item}', S['bullet']))
+    story.append(Paragraph(
+        '<b>Seed automático na inicialização:</b> a cada inicialização o sistema lê '
+        '<font name="Courier">users_backup.csv</font> da raiz do projeto e insere '
+        'os usuários que ainda não existem no banco (contas e senhas existentes nunca '
+        'são sobrescritas). Exporte e faça commit deste arquivo após adicionar ou '
+        'alterar usuários para garantir que sobrevivam aos redeployments.', S['note']))
 
     story += [Paragraph('4.2  Persistência do Banco de Dados', S['h2'])]
     story.append(db_table([
