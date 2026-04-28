@@ -724,6 +724,40 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             species_export = species_export.sort_values(sort_sp)
         species_export['completeness'] = species_export['completeness'].round(2)
 
+        # --- Missing fields detail: one row per accepted species/subspecies, by family ---
+        _na_masks = {}
+        for _col in manual_present:
+            if _col == 'marinedomain':
+                _na_masks[_col] = is_epicontinental
+            elif _col == 'epicontinentaldomain':
+                _na_masks[_col] = is_marine
+            elif _col == 'animalhostnames':
+                _na_masks[_col] = ~is_parasite
+            elif _col == 'vegetalhostnames':
+                _na_masks[_col] = ~(is_parasite | is_herbivore)
+            else:
+                _na_masks[_col] = pd.Series(False, index=species_data.index)
+
+        _id_cols = [c for c in ['family', 'scientificname', 'taxonrank',
+                                 'completeness', 'filled_count', 'total_applicable']
+                    if c in species_data.columns]
+        missing_detail = species_data[_id_cols].copy()
+        missing_detail.insert(0, 'taxon_analisado', taxon_filter)
+        if 'scientificname' in missing_detail.columns:
+            missing_detail.rename(columns={'scientificname': 'nome_aceito'}, inplace=True)
+
+        for _col in manual_present:
+            missing_detail[_col] = np.where(
+                _na_masks[_col],
+                'N/A',
+                np.where(filled_matrix[_col], 'Preenchido', 'Faltante')
+            )
+
+        _sort_missing = [c for c in ['family', 'nome_aceito'] if c in missing_detail.columns]
+        if _sort_missing:
+            missing_detail = missing_detail.sort_values(_sort_missing)
+        missing_detail['completeness'] = missing_detail['completeness'].round(2)
+
         # --- Write files ---
         temp_dir = os.path.join(app.root_path, 'temp_analysis_output',
                                 taxon_filter.replace(" ", "_") + "_" + str(os.getpid()))
@@ -738,6 +772,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             ("completeness_by_subclass.xlsx", by_subclass_out),
             ("completeness_by_phylum.xlsx",   by_phylum_out),
             ("completeness_per_species.xlsx", species_export),
+            ("missing_fields_by_family.xlsx", missing_detail),
         ]:
             if df.empty:
                 continue
