@@ -32,16 +32,24 @@
                   font-size: .83rem; color: #7f8c8d; text-align: center; line-height: 1.5; }
         .forgot a { color: #2980b9; text-decoration: none; }
         .forgot a:hover { text-decoration: underline; }
+        .lang-bar { display: flex; gap: .5rem; margin-bottom: 1.4rem; }
+        .lang-btn { flex: 1; padding: .5rem; border: 2px solid #dce1e7; border-radius: 6px;
+                    background: white; font-size: .9rem; font-weight: 600; cursor: pointer;
+                    text-decoration: none; text-align: center; color: #7f8c8d;
+                    transition: border-color .15s, color .15s, background .15s; }
+        .lang-btn:hover { border-color: #2980b9; color: #2980b9; }
+        .lang-btn.active { border-color: #2980b9; background: #eaf4fd; color: #1a5276; }
     </style>
 </head>
 <body>
-<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
-  <a href="{{ url_for('set_lang', code='pt') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">PT</a>
-  <a href="{{ url_for('set_lang', code='en') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">EN</a>
-</div>
 <div class="card">
     <h2>Porcentômetro</h2>
     <p class="app-name">Taxonomic Catalogue of Brazilian Fauna</p>
+
+    <div class="lang-bar">
+        <a class="lang-btn" href="{{ url_for('set_lang', code='pt') }}">🇧🇷 Português</a>
+        <a class="lang-btn active" href="{{ url_for('set_lang', code='en') }}">🇺🇸 English</a>
+    </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
