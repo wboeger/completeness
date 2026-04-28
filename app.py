@@ -515,6 +515,25 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         if species_data.empty:
             return None
 
+        # Deduplicate by canonical epithet key: when the same name combination appears
+        # in multiple rows, keep only the row with the oldest namepublishedinyear.
+        # Key = genus + subgenus + specificepithet + infraspecificepithet (non-empty parts joined).
+        _epi_cols = [c for c in ['genus', 'subgenus', 'specificepithet', 'infraspecificepithet']
+                     if c in species_data.columns]
+        if _epi_cols and 'namepublishedinyear' in species_data.columns:
+            species_data['_epi_key'] = species_data[_epi_cols].fillna('').apply(
+                lambda r: ' '.join(p for p in r if str(p).strip()), axis=1
+            ).str.lower().str.strip()
+            species_data['_year_sort'] = pd.to_numeric(
+                species_data['namepublishedinyear'], errors='coerce'
+            )
+            species_data = (
+                species_data
+                .sort_values('_year_sort', ascending=True, na_position='last')
+                .drop_duplicates(subset='_epi_key', keep='first')
+            )
+            species_data.drop(columns=['_epi_key', '_year_sort'], inplace=True)
+
         # Deduplicate: keep only the first row per taxonid
         if 'taxonid' in species_data.columns:
             species_data = species_data.drop_duplicates(subset='taxonid', keep='first')
