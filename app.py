@@ -557,9 +557,9 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                                 if vl_present else '')
                         loc  = (str(row.get('vernacularnamelocality',  '') or '').strip()
                                 if vloc_present else '')
-                        extras = ', '.join(p for p in [lang, loc]
-                                          if p and p.lower() != 'nan')
-                        entries.append(f'{name} ({extras})' if extras else name)
+                        parts = [p for p in [name, lang, loc]
+                                 if p and p.lower() != 'nan']
+                        entries.append('(' + ', '.join(parts) + ')' if len(parts) > 1 else name)
                     merged['vernacularname'] = (
                         '|'.join(list(dict.fromkeys(entries))) if entries else np.nan
                     )
