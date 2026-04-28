@@ -24,6 +24,10 @@
     </style>
 </head>
 <body>
+<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
+  <a href="{{ url_for('set_lang', code='pt') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">PT</a>
+  <a href="{{ url_for('set_lang', code='en') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">EN</a>
+</div>
 <div class="container">
     <div class="nav">
         <a href="{{ url_for('admin_dashboard') }}">← Painel Admin</a>

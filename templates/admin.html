@@ -36,6 +36,10 @@
     </style>
 </head>
 <body>
+<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
+  <a href="{{ url_for('set_lang', code='pt') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">PT</a>
+  <a href="{{ url_for('set_lang', code='en') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">EN</a>
+</div>
     <div class="container">
         <h2>Admin Dashboard</h2>
 
@@ -105,6 +109,60 @@
                         border-radius:4px; font-size:.85rem; cursor:pointer;">
                     ↻ Tentar recarregar do Google Drive
                 </button>
+            </form>
+        </div>
+
+        <h3>Datas dos arquivos de dados</h3>
+        <div style="background:#fef9e7; border:1px solid #f9e07a; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
+            <p style="margin:0 0 .8rem; font-size:.92rem;">
+                Informe as datas de referência dos arquivos utilizados nas análises.
+                Essas datas serão exibidas aos usuários na página de resultados.
+            </p>
+            <form method="POST" action="{{ url_for('set_data_dates') }}">
+                <table style="border:none; width:auto; font-size:.9rem;">
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            Planilha Estendida
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="text" name="planilha_extendida"
+                                   value="{{ data_dates.planilha_extendida }}"
+                                   placeholder="ex.: 28/04/2026"
+                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:180px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            Pesquisadores
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="text" name="pesquisadores"
+                                   value="{{ data_dates.pesquisadores }}"
+                                   placeholder="ex.: 28/04/2026"
+                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:180px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            Nota adicional
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="text" name="nota"
+                                   value="{{ data_dates.nota }}"
+                                   placeholder="ex.: Versão de referência para o relatório anual"
+                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:340px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="border:none; padding:.6rem 0 0 0;">
+                            <button type="submit" style="background:#2980b9; color:white; border:none;
+                                    padding:.5rem 1.3rem; border-radius:4px; font-weight:600;
+                                    cursor:pointer; font-size:.9rem;">
+                                Salvar datas
+                            </button>
+                        </td>
+                    </tr>
+                </table>
             </form>
         </div>
 

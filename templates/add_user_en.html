@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add User</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
+  <a href="{{ url_for('set_lang', code='pt') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">PT</a>
+  <a href="{{ url_for('set_lang', code='en') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">EN</a>
+</div>
+    <div class="container">
+        <h2>Add New User</h2>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('add_user') }}">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+            <label for="is_admin">
+                <input type="checkbox" id="is_admin" name="is_admin"> Is Admin
+            </label>
+            <button type="submit">Add User</button>
+        </form>
+        <p><a href="{{ url_for('admin_dashboard') }}">Back to Admin Dashboard</a></p>
+        <p><a href="{{ url_for('logout') }}">Logout</a></p>
+    </div>
+</body>
+</html>

@@ -35,6 +35,7 @@ db = SQLAlchemy(app)
 
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
 PLANILHA_EXTENDIDA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1zG0Ax_wKgg6UB9PgVXg29_qoZKDCE1Db/export?format=xlsx"
+DATA_DATES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'data_dates.json')
 # --- End Configuration ---
 
 # --- Database Model ---
@@ -742,6 +743,82 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         species_data['filled_count'] = filled_count.values
         species_data['completeness'] = (species_data['filled_count'] / species_data['total_applicable']) * 100
 
+        # --- Per-column applicability mask (for missing-fields CSV) ---
+        applicable_mask = pd.DataFrame(True, index=species_data.index, columns=manual_present)
+        effective_filled = filled_matrix.copy()
+
+        # environment "vazio" → applicable but counts as not filled
+        if 'environment' in manual_present:
+            effective_filled.loc[is_vazio, 'environment'] = False
+
+        # endemicbrazil = SIM → country not applicable
+        if 'country' in manual_present:
+            applicable_mask.loc[endemic_sim, 'country'] = False
+
+        # Domain applicability
+        if epi_in and marine_in:
+            applicable_mask.loc[is_epicontinental, 'marinedomain'] = False
+            applicable_mask.loc[is_marine, 'epicontinentaldomain'] = False
+            _ambig = is_vazio | is_null_env
+            _ke = _ambig & (filled_matrix['epicontinentaldomain'] | ~filled_matrix['marinedomain'])
+            _km = _ambig & filled_matrix['marinedomain'] & ~filled_matrix['epicontinentaldomain']
+            applicable_mask.loc[_ke, 'marinedomain'] = False
+            applicable_mask.loc[_km, 'epicontinentaldomain'] = False
+        elif epi_in and not marine_in:
+            applicable_mask.loc[is_marine, 'epicontinentaldomain'] = False
+        elif marine_in and not epi_in:
+            applicable_mask.loc[is_epicontinental, 'marinedomain'] = False
+
+        # Host applicability
+        if animal_in:
+            applicable_mask.loc[is_empty_lf | is_vida_livre | is_herbivore | is_parasite, 'animalhostnames'] = False
+        if vegetal_in:
+            applicable_mask.loc[is_empty_lf | is_vida_livre | is_parasite, 'vegetalhostnames'] = False
+
+        unfilled_mask = applicable_mask & ~effective_filled
+
+        _FIELD_PT = {
+            'bibliographicreference':  'referencia_bibliografica',
+            'country':                 'pais',
+            'establishmentmeans':      'origem',
+            'endemicbrazil':           'endemica_brasil',
+            'environment':             'ambiente',
+            'locality':                'localidade',
+            'epicontinentaldomain':    'dominio_epicontinental',
+            'marinedomain':            'dominio_marinho',
+            'lifeform':                'forma_de_vida',
+            'habitat':                 'habitat',
+            'vernacularname':          'nome_vernacular',
+            'vernacularnamelanguage':  'lingua_nome_vernacular',
+            'vernacularnamelocality':  'localidade_nome_vernacular',
+            'animalhostnames':         'hospedeiro_animal',
+            'vegetalhostnames':        'hospedeiro_vegetal',
+        }
+
+        _id_cols = [c for c in ['taxonid', 'family', 'genus', 'scientificname', 'taxonrank']
+                    if c in species_data.columns]
+        missing_fields_df = species_data[_id_cols].copy()
+        missing_fields_df.insert(0, 'taxon_analisado', taxon_filter)
+
+        for _col in manual_present:
+            missing_fields_df[_FIELD_PT.get(_col, _col)] = unfilled_mask[_col].map({True: 'faltante', False: ''})
+
+        # Combined host slot for parasites
+        if (animal_in or vegetal_in) and is_parasite.any():
+            if animal_in and vegetal_in:
+                _host_eff = effective_filled['animalhostnames'] | effective_filled['vegetalhostnames']
+            elif animal_in:
+                _host_eff = effective_filled['animalhostnames']
+            else:
+                _host_eff = effective_filled['vegetalhostnames']
+            missing_fields_df['hospedeiro_parasite'] = (is_parasite & ~_host_eff).map({True: 'faltante', False: ''})
+
+        _field_cols = [c for c in missing_fields_df.columns if c not in _id_cols and c != 'taxon_analisado']
+        missing_fields_df = missing_fields_df[missing_fields_df[_field_cols].eq('faltante').any(axis=1)]
+        _sort_miss = [c for c in ['family', 'genus', 'scientificname'] if c in missing_fields_df.columns]
+        if _sort_miss:
+            missing_fields_df = missing_fields_df.sort_values(_sort_miss)
+
         # --- Aggregation helpers ---
         def most_common_val(x):
             x = x.dropna()
@@ -892,6 +969,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             df.to_excel(path, index=False)
             generated_files.append(path)
 
+        if not missing_fields_df.empty:
+            miss_path = os.path.join(temp_dir, "campos_faltantes_por_especie.csv")
+            missing_fields_df.to_csv(miss_path, index=False, encoding='utf-8-sig')
+            generated_files.append(miss_path)
+
         for fname, df, col, label, sort_cols in [
             ("completeness_histograms_genus.pdf",    by_genus,    'genus',    'Gênero',    ['family', 'genus']),
             ("completeness_histograms_family.pdf",   by_family,   'family',   'Família',   ['phylum', 'class', 'order', 'family']),
@@ -932,6 +1014,26 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         import traceback
         traceback.print_exc()
         return None, None
+
+# --- Language helpers ---
+def tmpl(name):
+    """Return template filename based on current session language."""
+    if session.get('lang') == 'en':
+        return f'{name}_en.html'
+    return f'{name}.html'
+
+# --- Data Dates helpers ---
+def load_data_dates():
+    try:
+        with open(DATA_DATES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {'planilha_extendida': '', 'pesquisadores': '', 'nota': ''}
+
+def save_data_dates(dates: dict):
+    os.makedirs(os.path.dirname(DATA_DATES_FILE), exist_ok=True)
+    with open(DATA_DATES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(dates, f, ensure_ascii=False, indent=2)
 
 # --- Flask Routes ---
 _USING_POSTGRES = 'postgresql' in DATABASE_URL
@@ -978,12 +1080,19 @@ with app.app_context():
             db.session.commit()
             print(f"[DB] Seeded {_seeded} user(s) from users_backup.csv.")
 
+@app.route('/lang/<code>')
+def set_lang(code):
+    if code in ('pt', 'en'):
+        session['lang'] = code
+    return redirect(request.referrer or url_for('index'))
+
+
 @app.route('/')
 def index():
     if 'user_id' not in session: return redirect(url_for('login'))
     user = User.query.get(session['user_id'])
-    return render_template('index.html', 
-                           username=user.username, 
+    return render_template(tmpl('index'),
+                           username=user.username,
                            is_admin=user.is_admin,
                            data_loaded=DATA_LOADED_SUCCESSFULLY,
                            allowed_taxa_list=session.get('allowed_taxa', []))
@@ -1007,7 +1116,7 @@ def login():
             return redirect(url_for('index'))
         else:
             flash('Credenciais inválidas.', 'danger')
-    return render_template('login.html')
+    return render_template(tmpl('login'))
 
 @app.route('/set_password', methods=['GET', 'POST'])
 def set_password():
@@ -1032,7 +1141,7 @@ def set_password():
             _load_session_taxa(user)
             flash('Senha definida com sucesso! Bem-vindo(a).', 'success')
             return redirect(url_for('index'))
-    return render_template('set_password.html', username=user.username)
+    return render_template(tmpl('set_password'), username=user.username)
 
 @app.route('/logout')
 def logout():
@@ -1087,11 +1196,12 @@ def analysis_result(result_id):
         flash('Resultado não encontrado ou expirado.', 'danger')
         return redirect(url_for('index'))
     user = User.query.get(session['user_id'])
-    return render_template('analysis_result.html',
+    return render_template(tmpl('analysis_result'),
                            summary=entry['summary'],
                            result_id=result_id,
                            username=user.username,
-                           is_admin=user.is_admin)
+                           is_admin=user.is_admin,
+                           data_dates=load_data_dates())
 
 @app.route('/result/<result_id>/download')
 def analysis_download(result_id):
@@ -1109,9 +1219,25 @@ def admin_dashboard():
         flash('Access denied: Administrators only.', 'danger')
         return redirect(url_for('index'))
     users = User.query.all()
-    return render_template('admin.html', users=users,
+    return render_template(tmpl('admin'), users=users,
                            username=User.query.get(session['user_id']).username,
-                           is_admin=True, using_postgres=_USING_POSTGRES)
+                           is_admin=True, using_postgres=_USING_POSTGRES,
+                           data_dates=load_data_dates())
+
+@app.route('/admin/set_data_dates', methods=['POST'])
+def set_data_dates():
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    dates = {
+        'planilha_extendida': request.form.get('planilha_extendida', '').strip(),
+        'pesquisadores':      request.form.get('pesquisadores', '').strip(),
+        'nota':               request.form.get('nota', '').strip(),
+    }
+    save_data_dates(dates)
+    flash('Datas dos arquivos atualizadas.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
 
 @app.route('/admin/upload_data', methods=['POST'])
 def upload_data():
@@ -1207,7 +1333,7 @@ def add_user():
                 print(f"Error creating user: {e}")
     
     current_user = User.query.get(session['user_id'])
-    return render_template('add_user.html', username=current_user.username, is_admin=current_user.is_admin)
+    return render_template(tmpl('add_user'), username=current_user.username, is_admin=current_user.is_admin)
 
 @app.route('/admin/import_users_csv', methods=['GET', 'POST'])
 def import_users_csv():
@@ -1248,7 +1374,7 @@ def import_users_csv():
         flash(f'Importação CSV: {created} criados, {skipped} já existiam, {errors} erros.', 'info')
         return redirect(url_for('admin_dashboard'))
     current_user = User.query.get(session['user_id'])
-    return render_template('import_users_csv.html', username=current_user.username, is_admin=True)
+    return render_template(tmpl('import_users_csv'), username=current_user.username, is_admin=True)
 
 @app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
 def reset_password(user_id):
@@ -1311,7 +1437,7 @@ def bulk_add_users():
         flash(f'Concluído: {created} criados, {skipped} já existiam, {not_found} não encontrados, {errors} erros.', 'info')
 
     current_user = User.query.get(session['user_id'])
-    return render_template('bulk_add_users.html',
+    return render_template(tmpl('bulk_add_users'),
                            results=results,
                            username=current_user.username,
                            is_admin=True)
@@ -1340,7 +1466,7 @@ def gbif_gap():
                              daemon=True)
         t.start()
         return redirect(url_for('gbif_gap_status', job_id=job_id))
-    return render_template('gbif_gap.html',
+    return render_template(tmpl('gbif_gap'),
                            username=user.username, is_admin=user.is_admin,
                            allowed_taxa=session.get('allowed_taxa', []),
                            data_loaded=DATA_LOADED_SUCCESSFULLY)
@@ -1354,7 +1480,7 @@ def gbif_gap_status(job_id):
     if job is None:
         flash('Job não encontrado.', 'danger')
         return redirect(url_for('gbif_gap'))
-    return render_template('gbif_gap_status.html',
+    return render_template(tmpl('gbif_gap_status'),
                            job=job, job_id=job_id,
                            username=user.username, is_admin=user.is_admin)
 

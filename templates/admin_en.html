@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { align-items: flex-start; padding: 2rem 1rem; }
+        .container { max-width: 860px; }
+        .alert-sqlite {
+            background: #fff3cd; color: #856404; border: 1px solid #ffc107;
+            border-radius: 6px; padding: .8rem 1.2rem; margin-bottom: 1.2rem;
+            font-size: .92rem;
+        }
+        .alert-sqlite strong { color: #6d4a00; }
+        .alert-pg {
+            background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7;
+            border-radius: 6px; padding: .8rem 1.2rem; margin-bottom: 1.2rem;
+            font-size: .92rem;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+        th, td { padding: .5rem .7rem; border: 1px solid #dce1e7; text-align: left; }
+        th { background: #2c3e50; color: white; }
+        tr:nth-child(even) { background: #f4f6f9; }
+        .btn-reset {
+            background: #e67e22; color: white; border: none; padding: .3rem .8rem;
+            border-radius: 4px; font-size: .82rem; cursor: pointer;
+        }
+        .btn-reset:hover { background: #ca6f1e; }
+        .flashes { list-style: none; padding: 0; }
+        .flashes li { padding: .6rem .9rem; margin-bottom: .5rem; border-radius: 5px; font-size: .9rem; }
+        .flashes .success { background: #d4edda; color: #155724; }
+        .flashes .danger  { background: #f8d7da; color: #721c24; }
+        .flashes .info    { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
+  <a href="{{ url_for('set_lang', code='pt') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">PT</a>
+  <a href="{{ url_for('set_lang', code='en') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">EN</a>
+</div>
+    <div class="container">
+        <h2>Admin Dashboard</h2>
+
+        {% if not using_postgres %}
+        <div class="alert-sqlite">
+            <strong>⚠ Warning: SQLite database detected.</strong>
+            User data <strong>will be lost</strong> on every redeploy.
+            Set the <code>DATABASE_URL</code> environment variable in Railway pointing to a
+            PostgreSQL database for permanent persistence.
+            In the meantime, use the <strong>Export CSV</strong> button below to back up
+            before each update.
+        </div>
+        {% else %}
+        <div class="alert-pg">
+            Database: <strong>PostgreSQL</strong> — data persists across deployments.
+        </div>
+        {% endif %}
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for category, message in messages %}
+                    <li class="{{ category }}">{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <h3>System data</h3>
+        <div style="background:#f4f6f9; border:1px solid #dce1e7; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
+            <p style="margin:0 0 .8rem; font-size:.92rem;">
+                <strong>Data spreadsheets</strong> — loaded from Google Drive on startup.
+                If loading fails (red indicator), upload manually below.
+            </p>
+            <form method="POST" action="{{ url_for('upload_data') }}" enctype="multipart/form-data">
+                <table style="border:none; width:auto; font-size:.9rem;">
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            pesquisadores.xlsx
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="file" name="pesquisadores" accept=".xlsx" style="font-size:.9rem;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            planilha_extendida.xlsx
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="file" name="planilha_extendida" accept=".xlsx" style="font-size:.9rem;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="border:none; padding:.6rem 0 0 0;">
+                            <button type="submit" style="background:#2980b9; color:white; border:none;
+                                    padding:.5rem 1.3rem; border-radius:4px; font-weight:600;
+                                    cursor:pointer; font-size:.9rem;">
+                                Upload file(s)
+                            </button>
+                        </td>
+                    </tr>
+                </table>
+            </form>
+            <hr style="margin:.8rem 0; border:none; border-top:1px solid #dce1e7;">
+            <form method="POST" action="{{ url_for('reload_data') }}" style="display:inline;">
+                <button type="submit" style="background:#7f8c8d; color:white; border:none; padding:.4rem 1rem;
+                        border-radius:4px; font-size:.85rem; cursor:pointer;">
+                    ↻ Retry loading from Google Drive
+                </button>
+            </form>
+        </div>
+
+        <h3>Data file dates</h3>
+        <div style="background:#fef9e7; border:1px solid #f9e07a; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
+            <p style="margin:0 0 .8rem; font-size:.92rem;">
+                Enter the reference dates for the files used in analyses.
+                These dates will be shown to users on the results page.
+            </p>
+            <form method="POST" action="{{ url_for('set_data_dates') }}">
+                <table style="border:none; width:auto; font-size:.9rem;">
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            Extended Spreadsheet
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="text" name="planilha_extendida"
+                                   value="{{ data_dates.planilha_extendida }}"
+                                   placeholder="e.g.: 28/04/2026"
+                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:180px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            Researchers
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="text" name="pesquisadores"
+                                   value="{{ data_dates.pesquisadores }}"
+                                   placeholder="e.g.: 28/04/2026"
+                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:180px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                            Additional note
+                        </td>
+                        <td style="border:none; padding:.3rem 0;">
+                            <input type="text" name="nota"
+                                   value="{{ data_dates.nota }}"
+                                   placeholder="e.g.: Reference version for the annual report"
+                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:340px;">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" style="border:none; padding:.6rem 0 0 0;">
+                            <button type="submit" style="background:#2980b9; color:white; border:none;
+                                    padding:.5rem 1.3rem; border-radius:4px; font-weight:600;
+                                    cursor:pointer; font-size:.9rem;">
+                                Save dates
+                            </button>
+                        </td>
+                    </tr>
+                </table>
+            </form>
+        </div>
+
+        <h3>Users</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Login</th>
+                    <th>Admin</th>
+                    <th>Password set</th>
+                    <th>Created at</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ 'Yes' if user.is_admin else 'No' }}</td>
+                    <td>{{ 'No (1st access pending)' if user.must_set_password else 'Yes' }}</td>
+                    <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '—' }}</td>
+                    <td>
+                        <form method="POST"
+                              action="{{ url_for('reset_password', user_id=user.id) }}"
+                              onsubmit="return confirm('Reset password for {{ user.username }}? The user will need to create a new password on next login.')">
+                            <button class="btn-reset" type="submit">Reset password</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p>
+            <a href="{{ url_for('bulk_add_users') }}"><strong>Bulk import users</strong></a>
+            &nbsp;|&nbsp;
+            <a href="{{ url_for('add_user') }}">Add individual user</a>
+            &nbsp;|&nbsp;
+            <a href="{{ url_for('export_users') }}">Export CSV (backup)</a>
+            &nbsp;|&nbsp;
+            <a href="{{ url_for('import_users_csv') }}">Restore CSV</a>
+        </p>
+        <p><a href="{{ url_for('index') }}">← Home</a> &nbsp;|&nbsp; <a href="{{ url_for('logout') }}">Logout</a></p>
+    </div>
+</body>
+</html>
