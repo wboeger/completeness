@@ -515,9 +515,12 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         if species_data.empty:
             return None
 
-        # Deduplicate by canonical epithet key: when the same name combination appears
-        # in multiple rows, keep only the row with the oldest namepublishedinyear.
-        # Key = genus + subgenus + specificepithet + infraspecificepithet (non-empty parts joined).
+        # Deduplicate by canonical epithet key:
+        # 1. Rows with the same epithet key AND the same namepublishedinyear are merged
+        #    column-by-column; distinct non-empty values are joined with '|'.
+        # 2. Among rows with the same epithet key but different years, keep only the
+        #    oldest namepublishedinyear (NaN years are treated as last).
+        # Key = genus + subgenus + specificepithet + infraspecificepithet (non-empty parts).
         _epi_cols = [c for c in ['genus', 'subgenus', 'specificepithet', 'infraspecificepithet']
                      if c in species_data.columns]
         if _epi_cols and 'namepublishedinyear' in species_data.columns:
@@ -526,6 +529,23 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             ).str.lower().str.strip()
             species_data['_year_sort'] = pd.to_numeric(
                 species_data['namepublishedinyear'], errors='coerce'
+            )
+
+            def _join_unique(series):
+                vals = series.dropna().astype(str).str.strip()
+                unique_vals = list(dict.fromkeys(
+                    v for v in vals if v and v.lower() != 'nan'
+                ))
+                return '|'.join(unique_vals) if unique_vals else np.nan
+
+            species_data = (
+                species_data
+                .groupby(['_epi_key', '_year_sort'], dropna=False, sort=False)
+                .agg(_join_unique)
+                .reset_index()
+            )
+            species_data['_year_sort'] = pd.to_numeric(
+                species_data['_year_sort'], errors='coerce'
             )
             species_data = (
                 species_data
