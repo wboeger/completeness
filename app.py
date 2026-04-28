@@ -531,19 +531,75 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 species_data['namepublishedinyear'], errors='coerce'
             )
 
-            def _join_unique(series):
-                vals = series.dropna().astype(str).str.strip()
+            def _join_unique(vals_iter):
+                """Join distinct non-empty string values with '|'."""
                 unique_vals = list(dict.fromkeys(
-                    v for v in vals if v and v.lower() != 'nan'
+                    v for v in (str(x).strip() for x in vals_iter)
+                    if v and v.lower() != 'nan'
                 ))
                 return '|'.join(unique_vals) if unique_vals else np.nan
 
-            species_data = (
-                species_data
-                .groupby(['_epi_key', '_year_sort'], dropna=False, sort=False)
-                .agg(_join_unique)
-                .reset_index()
+            def _merge_group(grp):
+                """Merge one group of rows into a single row.
+                vernacularname entries are annotated with (language, locality) when present."""
+                merged = {}
+                # Vernacular name: embed language and locality into each name entry
+                vn_present  = 'vernacularname'         in grp.columns
+                vl_present  = 'vernacularnamelanguage' in grp.columns
+                vloc_present = 'vernacularnamelocality' in grp.columns
+                if vn_present:
+                    entries = []
+                    for _, row in grp.iterrows():
+                        name = str(row.get('vernacularname', '') or '').strip()
+                        if not name or name.lower() == 'nan':
+                            continue
+                        lang = (str(row.get('vernacularnamelanguage', '') or '').strip()
+                                if vl_present else '')
+                        loc  = (str(row.get('vernacularnamelocality',  '') or '').strip()
+                                if vloc_present else '')
+                        extras = ', '.join(p for p in [lang, loc]
+                                          if p and p.lower() != 'nan')
+                        entries.append(f'{name} ({extras})' if extras else name)
+                    merged['vernacularname'] = (
+                        '|'.join(list(dict.fromkeys(entries))) if entries else np.nan
+                    )
+                # All other columns: join distinct values
+                for col in grp.columns:
+                    if col == 'vernacularname':
+                        continue
+                    merged[col] = _join_unique(grp[col])
+                return pd.Series(merged)
+
+            # Build a stable group key (NaN year → sentinel string)
+            _year_str = species_data['_year_sort'].apply(
+                lambda x: str(int(x)) if pd.notna(x) else '__nan__'
             )
+            species_data['_group_key'] = species_data['_epi_key'] + '||' + _year_str
+
+            _counts = species_data.groupby('_group_key', sort=False).size()
+            _multi  = set(_counts[_counts > 1].index)
+            _single_mask = ~species_data['_group_key'].isin(_multi)
+
+            singles  = species_data[_single_mask].copy()
+            multiples = species_data[~_single_mask].copy()
+
+            if not multiples.empty:
+                merged_rows = (
+                    multiples
+                    .groupby('_group_key', sort=False)
+                    .apply(_merge_group, include_groups=False)
+                    .reset_index(level=0, drop=True)
+                    .reset_index(drop=True)
+                )
+                # Restore the group key so we can drop it later
+                merged_rows['_group_key'] = (
+                    multiples.groupby('_group_key', sort=False)['_group_key'].first().values
+                )
+                species_data = pd.concat([singles, merged_rows], ignore_index=True)
+            else:
+                species_data = singles
+
+            species_data.drop(columns=['_group_key'], inplace=True)
             species_data['_year_sort'] = pd.to_numeric(
                 species_data['_year_sort'], errors='coerce'
             )
