@@ -538,28 +538,13 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
             return
 
         # Filtering invasive species by taxon_name if provided
-        # In the TSV, we look for higher classification columns
-        # Ranking columns to check in the invasive species list
-        INV_RANK_COLS = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'scientificName']
+        # The invasive list only has binomials, so we use the CTFB as a "taxonomic universe"
+        # to identify which species in the invasive list belong to the requested taxon.
         
-        if taxon_name and taxon_name.lower() != 'animalia':
-            mask = pd.Series(False, index=invasive_df.index)
-            for col in INV_RANK_COLS:
-                if col in invasive_df.columns:
-                    mask |= (invasive_df[col].astype(str).str.lower().str.strip() == taxon_name.lower())
-            invasive_df = invasive_df[mask].copy()
-
-        if invasive_df.empty:
-            INVASIVE_JOBS[job_id].update(status='error', 
-                error=f'Nenhuma espécie invasora encontrada para o táxon "{taxon_name}".')
-            return
-
-        update(f'Lista carregada e filtrada ({len(invasive_df)} registros). Comparando com CTFB…', 20)
-
         # ── Phase 2: compare with CTFB (also filtered by taxon) ──
-        df = planilha_df.copy()
+        df_full = planilha_df.copy()
         
-        # Filter CTFB by taxon_name
+        # Filter CTFB by taxon_name to get the "Universe" of relevant species
         RANK_HIERARCHY = [
             'phylum', 'superclass', 'class', 'subclass', 'infraclass',
             'superorder', 'order', 'suborder', 'infraorder',
@@ -568,19 +553,52 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
         ]
         
         if taxon_name and taxon_name.lower() != 'animalia':
-            mask = pd.Series(False, index=df.index)
+            mask_universe = pd.Series(False, index=df_full.index)
             for rank in RANK_HIERARCHY:
-                if rank in df.columns:
-                    mask |= (df[rank].astype(str).str.lower().str.strip() == taxon_name.lower())
-            df = df[mask].copy()
+                if rank in df_full.columns:
+                    mask_universe |= (df_full[rank].astype(str).str.lower().str.strip() == taxon_name.lower())
+            df_filtered = df_full[mask_universe].copy()
+        else:
+            df_filtered = df_full.copy()
 
-        has_status = 'taxonomicstatus' in df.columns
-        sp_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
-        has_binomial = df.get('genus', pd.Series(dtype=str)).notna() & \
-                       df.get('specificepithet', pd.Series(dtype=str)).notna()
+        if df_filtered.empty:
+            INVASIVE_JOBS[job_id].update(status='error', 
+                error=f'O táxon "{taxon_name}" não contém espécies no CTFB.')
+            return
+
+        # Identify all binomials (accepted and synonyms) in CTFB for this taxon
+        # to filter the invasive list.
+        def get_all_binomials(dataframe):
+            sp_m = dataframe['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+            has_bin = dataframe.get('genus', pd.Series(dtype=str)).notna() & \
+                      dataframe.get('specificepithet', pd.Series(dtype=str)).notna()
+            sub = dataframe[sp_m & has_bin]
+            return set(
+                (sub['genus'].str.strip() + ' ' + sub['specificepithet'].str.strip())
+                .str.lower()
+            )
+
+        taxon_universe_binomials = get_all_binomials(df_filtered)
+        
+        # Now filter the invasive list by this universe
+        invasive_df['binomial'] = invasive_df['scientificName'].str.strip().str.lower()
+        invasive_df = invasive_df[invasive_df['binomial'].isin(taxon_universe_binomials)].copy()
+
+        if invasive_df.empty:
+            INVASIVE_JOBS[job_id].update(status='error', 
+                error=f'Nenhuma espécie da lista de invasoras pertence ao táxon "{taxon_name}" (baseado no CTFB).')
+            return
+
+        update(f'Lista filtrada pelo universo "{taxon_name}" ({len(invasive_df)} registros). Comparando...', 20)
+
+        # Now proceed with the standard comparison using the filtered CTFB subset
+        has_status = 'taxonomicstatus' in df_filtered.columns
+        sp_mask = df_filtered['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        has_binomial = df_filtered.get('genus', pd.Series(dtype=str)).notna() & \
+                       df_filtered.get('specificepithet', pd.Series(dtype=str)).notna()
 
         def make_binomials(mask):
-            sub = df[mask & has_binomial]
+            sub = df_filtered[mask & has_binomial]
             return set(
                 (sub['genus'].str.strip() + ' ' + sub['specificepithet'].str.strip())
                 .str.lower()
@@ -589,14 +607,14 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
         # Accepted names
         if has_status:
             ctfb_accepted = make_binomials(
-                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'))
+                sp_mask & (df_filtered['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'))
         else:
             ctfb_accepted = make_binomials(sp_mask)
 
         # Synonyms
         if has_status:
             ctfb_synonyms = make_binomials(
-                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() != 'NOME_ACEITO')
+                sp_mask & (df_filtered['taxonomicstatus'].str.upper().str.strip() != 'NOME_ACEITO')
             ) - ctfb_accepted
         else:
             ctfb_synonyms = set()
