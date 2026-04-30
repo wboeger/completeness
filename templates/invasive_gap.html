@@ -50,6 +50,22 @@
 
     <div class="card">
         <form method="POST">
+            <div style="margin-bottom: 1.5rem; text-align: left;">
+                <label for="taxon" style="display: block; font-weight: 600; margin-bottom: .5rem; color: #34495e;">
+                    Filtrar por Táxon:
+                </label>
+                <input type="text" id="taxon" name="taxon" placeholder="Ex: Chordata, Felidae, Panthera..."
+                       style="width: 100%; padding: .8rem; border: 1px solid #dce1e7; border-radius: 5px; font-size: 1rem;"
+                       required>
+                <p style="font-size: .8rem; color: #7f8c8d; margin-top: .4rem;">
+                    Apenas espécies invasoras pertencentes a este táxon serão analisadas.
+                </p>
+                {% if allowed_taxa %}
+                <div style="margin-top: .8rem; font-size: .82rem; color: #2c3e50;">
+                    <strong>Seus táxons autorizados:</strong> {{ allowed_taxa|join(', ') }}
+                </div>
+                {% endif %}
+            </div>
             <button type="submit">Iniciar Comparação</button>
         </form>
     </div>

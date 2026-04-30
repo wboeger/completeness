@@ -36,6 +36,8 @@ db = SQLAlchemy(app)
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
 PLANILHA_EXTENDIDA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1zG0Ax_wKgg6UB9PgVXg29_qoZKDCE1Db/export?format=xlsx"
 INVASIVE_LIST_URL = "https://drive.google.com/uc?export=download&id=1_KHngk2dHKir5Phsndpp_eN_bydBYM3s"
+IPT_SOURCE_URL = "https://ipt.jbrj.gov.br/jbrj/archive.do?r=catalogo_taxonomico_da_fauna_do_brasil&v=1.50"
+IPT_COMBINED_SHEET_URL = os.environ.get('IPT_COMBINED_SHEET_URL', '')
 DATA_DATES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'data_dates.json')
 # --- End Configuration ---
 
@@ -61,7 +63,86 @@ class User(db.Model):
 TAXON_HIERARCHY = {}
 PESQUISADORES_DF = None
 PLANILHA_DF = None
+IPT_DF = None
 DATA_LOADED_SUCCESSFULLY = False
+
+IPT_UPDATE_JOB = {'status': 'idle', 'message': '', 'last_update': None}
+
+def download_file(url, dest_path):
+    try:
+        response = requests.get(url, stream=True, timeout=60)
+        response.raise_for_status()
+        with open(dest_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        return True
+    except Exception as e:
+        print(f"Error downloading {url}: {e}")
+        return False
+
+def process_ipt_archive():
+    global IPT_UPDATE_JOB, IPT_DF
+    IPT_UPDATE_JOB['status'] = 'running'
+    IPT_UPDATE_JOB['message'] = 'Iniciando download do IPT...'
+    
+    data_dir = os.path.join(app.root_path, 'data')
+    ipt_dir = os.path.join(data_dir, 'ipt_tmp')
+    os.makedirs(ipt_dir, exist_ok=True)
+    zip_path = os.path.join(ipt_dir, 'dwca.zip')
+    
+    try:
+        if not download_file(IPT_SOURCE_URL, zip_path):
+            raise Exception("Falha no download do arquivo ZIP do IPT.")
+            
+        IPT_UPDATE_JOB['message'] = 'Extraindo arquivos...'
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(ipt_dir)
+            
+        taxon_file = os.path.join(ipt_dir, 'taxon.txt')
+        dist_file = os.path.join(ipt_dir, 'distribution.txt')
+        vern_file = os.path.join(ipt_dir, 'vernacularname.txt')
+        
+        if not os.path.exists(taxon_file):
+            raise Exception("Arquivo taxon.txt não encontrado no arquivo ZIP.")
+            
+        IPT_UPDATE_JOB['message'] = 'Processando tabelas (pode demorar alguns minutos)...'
+        
+        # Process Taxon
+        taxon_df = pd.read_csv(taxon_file, sep='\t', low_memory=False)
+        
+        # Process Distribution
+        dist_agg = pd.DataFrame(columns=['id', 'distribution'])
+        if os.path.exists(dist_file):
+            dist_df = pd.read_csv(dist_file, sep='\t', low_memory=False)
+            dist_agg = dist_df.groupby('id')['locality'].apply(lambda x: '; '.join(filter(None, x.astype(str).unique()))).reset_index()
+            dist_agg.rename(columns={'locality': 'distribution'}, inplace=True)
+            
+        # Process Vernacular
+        vern_agg = pd.DataFrame(columns=['id', 'common_names'])
+        if os.path.exists(vern_file):
+            vern_df = pd.read_csv(vern_file, sep='\t', low_memory=False)
+            vern_agg = vern_df.groupby('id')['vernacularName'].apply(lambda x: '; '.join(filter(None, x.astype(str).unique()))).reset_index()
+            vern_agg.rename(columns={'vernacularName': 'common_names'}, inplace=True)
+            
+        IPT_UPDATE_JOB['message'] = 'Mesclando dados...'
+        merged = taxon_df.merge(dist_agg, on='id', how='left').merge(vern_agg, on='id', how='left')
+        merged.columns = [c.lower().strip() for c in merged.columns]
+        
+        output_csv = os.path.join(data_dir, 'ipt_combined.csv')
+        merged.to_csv(output_csv, index=False)
+        
+        IPT_DF = merged
+        IPT_UPDATE_JOB['status'] = 'success'
+        IPT_UPDATE_JOB['message'] = f'IPT atualizado com sucesso! {len(merged)} registros processados.'
+        IPT_UPDATE_JOB['last_update'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Clean up tmp dir
+        shutil.rmtree(ipt_dir)
+        
+    except Exception as e:
+        IPT_UPDATE_JOB['status'] = 'error'
+        IPT_UPDATE_JOB['message'] = f'Erro: {str(e)}'
+        print(f"IPT Processing Error: {e}")
 
 def download_gsheet(url):
     try:
@@ -74,9 +155,10 @@ def download_gsheet(url):
 
 LOCAL_PESQUISADORES = os.path.join(os.path.dirname(__file__), 'data', 'pesquisadores.xlsx')
 LOCAL_PLANILHA      = os.path.join(os.path.dirname(__file__), 'data', 'planilha_extendida.xlsx')
+LOCAL_IPT_COMBINED  = os.path.join(os.path.dirname(__file__), 'data', 'ipt_combined.csv')
 
 def load_data_on_startup():
-    global TAXON_HIERARCHY, PESQUISADORES_DF, PLANILHA_DF, DATA_LOADED_SUCCESSFULLY
+    global TAXON_HIERARCHY, PESQUISADORES_DF, PLANILHA_DF, IPT_DF, DATA_LOADED_SUCCESSFULLY
 
     # --- pesquisadores ---
     try:
@@ -107,6 +189,20 @@ def load_data_on_startup():
             print(f"  {len(PLANILHA_DF)} records loaded.")
     except Exception as e:
         print(f"ERROR loading planilha: {e}")
+
+    # --- IPT combined (optional) ---
+    try:
+        if os.path.exists(LOCAL_IPT_COMBINED):
+            IPT_DF = pd.read_csv(LOCAL_IPT_COMBINED, low_memory=False)
+            print(f"Loaded IPT data from local file. {len(IPT_DF)} records.")
+        elif IPT_COMBINED_SHEET_URL:
+            # Attempt to download from GDrive if configured
+            resp = requests.get(IPT_COMBINED_SHEET_URL, timeout=60)
+            if resp.status_code == 200:
+                IPT_DF = pd.read_csv(BytesIO(resp.content), low_memory=False)
+                print("Loaded IPT data from Google Drive link.")
+    except Exception as e:
+        print(f"ERROR loading IPT data: {e}")
 
     # --- build taxon hierarchy ---
     if PLANILHA_DF is not None:
@@ -418,7 +514,7 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
     except Exception as e:
         GBIF_JOBS[job_id].update(status='error', error=str(e))
 
-def _invasive_gap_worker(job_id, planilha_df):
+def _invasive_gap_worker(job_id, taxon_name, planilha_df):
     def update(progress, pct=None):
         INVASIVE_JOBS[job_id]['progress'] = progress
         if pct is not None:
@@ -428,7 +524,7 @@ def _invasive_gap_worker(job_id, planilha_df):
         INVASIVE_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
                                  'result_path': None, 'error': None}
 
-        # ── Phase 1: download invasive species list ──
+        # ── Phase 1: download and filter invasive species list ──
         update('Baixando lista de espécies invasoras…', 5)
         response = requests.get(INVASIVE_LIST_URL, timeout=60)
         response.raise_for_status()
@@ -441,10 +537,43 @@ def _invasive_gap_worker(job_id, planilha_df):
             INVASIVE_JOBS[job_id].update(status='error', error='Lista de espécies invasoras vazia.')
             return
 
-        update(f'Lista carregada ({len(invasive_df)} registros). Comparando com CTFB…', 20)
+        # Filtering invasive species by taxon_name if provided
+        # In the TSV, we look for higher classification columns
+        # Ranking columns to check in the invasive species list
+        INV_RANK_COLS = ['kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'scientificName']
+        
+        if taxon_name and taxon_name.lower() != 'animalia':
+            mask = pd.Series(False, index=invasive_df.index)
+            for col in INV_RANK_COLS:
+                if col in invasive_df.columns:
+                    mask |= (invasive_df[col].astype(str).str.lower().str.strip() == taxon_name.lower())
+            invasive_df = invasive_df[mask].copy()
 
-        # ── Phase 2: compare with CTFB ──
+        if invasive_df.empty:
+            INVASIVE_JOBS[job_id].update(status='error', 
+                error=f'Nenhuma espécie invasora encontrada para o táxon "{taxon_name}".')
+            return
+
+        update(f'Lista carregada e filtrada ({len(invasive_df)} registros). Comparando com CTFB…', 20)
+
+        # ── Phase 2: compare with CTFB (also filtered by taxon) ──
         df = planilha_df.copy()
+        
+        # Filter CTFB by taxon_name
+        RANK_HIERARCHY = [
+            'phylum', 'superclass', 'class', 'subclass', 'infraclass',
+            'superorder', 'order', 'suborder', 'infraorder',
+            'superfamily', 'family', 'subfamily', 'tribe', 'subtribe',
+            'genus', 'subgenus',
+        ]
+        
+        if taxon_name and taxon_name.lower() != 'animalia':
+            mask = pd.Series(False, index=df.index)
+            for rank in RANK_HIERARCHY:
+                if rank in df.columns:
+                    mask |= (df[rank].astype(str).str.lower().str.strip() == taxon_name.lower())
+            df = df[mask].copy()
+
         has_status = 'taxonomicstatus' in df.columns
         sp_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
         has_binomial = df.get('genus', pd.Series(dtype=str)).notna() & \
@@ -489,7 +618,7 @@ def _invasive_gap_worker(job_id, planilha_df):
         update('Gerando arquivo XLSX…', 85)
         result_path = os.path.join('/tmp', f'invasive_gap_{job_id}.xlsx')
         
-        _export_cols = ['scientificName', 'genus', 'specificEpithet', 'datasetName']
+        _export_cols = ['scientificName', 'kingdom', 'phylum', 'class', 'order', 'family', 'genus', 'specificEpithet', 'datasetName']
         export_cols = [c for c in _export_cols if c in invasive_df.columns]
 
         with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
@@ -510,6 +639,7 @@ def _invasive_gap_worker(job_id, planilha_df):
             status='done', pct=100,
             progress='Concluído.',
             result_path=zip_path,
+            taxon_name=taxon_name,
             n_total=len(invasive_df),
             n_missing=len(not_in_ctfb),
             n_synonym=len(as_synonym),
@@ -1628,12 +1758,21 @@ def invasive_gap():
         return redirect(url_for('login'))
     user = User.query.get(session['user_id'])
     if request.method == 'POST':
+        taxon_name = request.form.get('taxon', '').strip()
+        if not taxon_name:
+            flash('Informe um táxon.', 'danger')
+            return redirect(url_for('invasive_gap'))
+        # Authorization: same rule as the main analysis
+        allowed = session.get('allowed_taxa', [])
+        if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
+            flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
+            return redirect(url_for('invasive_gap'))
         if PLANILHA_DF is None:
             flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
             return redirect(url_for('invasive_gap'))
         job_id = uuid.uuid4().hex
         t = threading.Thread(target=_invasive_gap_worker,
-                             args=(job_id, PLANILHA_DF.copy()),
+                             args=(job_id, taxon_name, PLANILHA_DF.copy()),
                              daemon=True)
         t.start()
         return redirect(url_for('invasive_gap_status', job_id=job_id))
@@ -1671,6 +1810,37 @@ def invasive_gap_poll(job_id):
     from flask import jsonify
     job = INVASIVE_JOBS.get(job_id, {'status': 'not_found'})
     return jsonify({k: v for k, v in job.items() if k != 'result_path'})
+
+@app.route('/admin/update_ipt', methods=['POST'])
+def admin_update_ipt():
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        return {"status": "error", "message": "Acesso negado"}, 403
+    
+    if IPT_UPDATE_JOB['status'] == 'running':
+        flash('Uma atualização do IPT já está em andamento.', 'warning')
+    else:
+        thread = threading.Thread(target=process_ipt_archive)
+        thread.start()
+        flash('Atualização do IPT iniciada em segundo plano. Isso pode levar alguns minutos.', 'info')
+    
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/ipt_status')
+def admin_ipt_status():
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        return {"status": "error", "message": "Acesso negado"}, 403
+    from flask import jsonify
+    return jsonify(IPT_UPDATE_JOB)
+
+@app.route('/admin/download_ipt_combined')
+def download_ipt_combined():
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    if not os.path.exists(LOCAL_IPT_COMBINED):
+        flash('Arquivo IPT combinado ainda não gerado.', 'warning')
+        return redirect(url_for('admin_dashboard'))
+    return send_file(LOCAL_IPT_COMBINED, as_attachment=True, download_name='ipt_combined.csv')
 
 if __name__ == '__main__':
     app.run(debug=True)

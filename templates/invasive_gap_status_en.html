@@ -43,6 +43,9 @@
     </div>
 
     <h1>Invasive × CTFB</h1>
+    <p style="margin-top:-.5rem; margin-bottom:1.5rem; color:#666;">
+        Taxon: <strong style="color:#2c3e50;">{{ job.taxon_name or 'Animalia' }}</strong>
+    </p>
 
     <div class="card" id="statusCard">
         {% if job.status == 'done' %}

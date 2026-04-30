@@ -112,6 +112,25 @@
             </form>
         </div>
 
+        <h3>Taxonomic Catalogue (IPT)</h3>
+        <div style="background:#e8f4fd; border:1px solid #b3d7f2; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
+            <p style="margin:0 0 .8rem; font-size:.92rem;">
+                <strong>IPT Integration</strong> — Download and process the Catálogo Taxonômico da Fauna do Brasil directly from the official source.
+                The generated file can be uploaded to Google Drive for permanent access.
+            </p>
+            <form method="POST" action="{{ url_for('admin_update_ipt') }}" id="ipt-form">
+                <button type="submit" id="ipt-btn" style="background:#27ae60; color:white; border:none; padding:.5rem 1.3rem; border-radius:4px; font-weight:600; cursor:pointer; font-size:.9rem;">
+                    Update IPT Data
+                </button>
+                <a href="{{ url_for('download_ipt_combined') }}" style="display:inline-block; margin-left:1rem; color:#2980b9; font-size:.9rem; text-decoration:none; font-weight:600;">
+                    ⬇ Download processed CSV
+                </a>
+            </form>
+            <div id="ipt-status" style="margin-top:.8rem; font-size:.85rem; color:#2c3e50; display:none;">
+                <span id="ipt-status-msg"></span>
+            </div>
+        </div>
+
         <h3>Data file dates</h3>
         <div style="background:#fef9e7; border:1px solid #f9e07a; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
             <p style="margin:0 0 .8rem; font-size:.92rem;">
@@ -207,5 +226,33 @@
         </p>
         <p><a href="{{ url_for('index') }}">← Home</a> &nbsp;|&nbsp; <a href="{{ url_for('logout') }}">Logout</a></p>
     </div>
+
+    <script>
+        function updateIptStatus() {
+            fetch('{{ url_for("admin_ipt_status") }}')
+                .then(response => response.json())
+                .then(data => {
+                    const statusDiv = document.getElementById('ipt-status');
+                    const statusMsg = document.getElementById('ipt-status-msg');
+                    const iptBtn = document.getElementById('ipt-btn');
+                    
+                    if (data.status === 'running') {
+                        statusDiv.style.display = 'block';
+                        statusMsg.innerHTML = '⏳ ' + data.message;
+                        iptBtn.disabled = true;
+                        iptBtn.style.opacity = '0.6';
+                        setTimeout(updateIptStatus, 3000);
+                    } else if (data.status === 'success' || data.status === 'error') {
+                        if (data.message) {
+                            statusDiv.style.display = 'block';
+                            statusMsg.innerHTML = (data.status === 'success' ? '✅ ' : '❌ ') + data.message;
+                        }
+                        iptBtn.disabled = false;
+                        iptBtn.style.opacity = '1';
+                    }
+                });
+        }
+        document.addEventListener('DOMContentLoaded', updateIptStatus);
+    </script>
 </body>
 </html>
