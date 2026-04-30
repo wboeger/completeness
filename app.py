@@ -583,6 +583,9 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
         # Now filter the invasive list by this universe
         invasive_df['binomial'] = invasive_df['scientificName'].str.strip().str.lower()
         invasive_df = invasive_df[invasive_df['binomial'].isin(taxon_universe_binomials)].copy()
+        
+        # Deduplicate to ensure each species is counted and listed only once
+        invasive_df = invasive_df.drop_duplicates(subset='binomial', keep='first')
 
         if invasive_df.empty:
             INVASIVE_JOBS[job_id].update(status='error', 
