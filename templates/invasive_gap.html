@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Espécies Invasoras — Porcentômetro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; margin: 0; padding: 2rem; }
+        .container { max-width: 820px; margin: 0 auto; }
+        h1 { color: #2c3e50; margin-bottom: .2rem; }
+        .subtitle { color: #7f8c8d; font-size: .95rem; margin-bottom: 2rem; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 2rem; margin-bottom: 1.5rem; text-align: center; }
+        button[type=submit] { background: #e67e22; color: white; border: none; padding: 1rem 2.5rem; border-radius: 5px; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+        button[type=submit]:hover { background: #d35400; }
+        .info-box { background: #eafaf1; border: 1px solid #27ae60; border-radius: 6px;
+                    padding: .8rem 1.1rem; font-size: .87rem; color: #145a32; margin-bottom: 1.2rem; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; font-size: .9rem; }
+        .nav a { color: #2980b9; text-decoration: none; }
+        .nav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
+  <a href="{{ url_for('set_lang', code='pt') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">PT</a>
+  <a href="{{ url_for('set_lang', code='en') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">EN</a>
+</div>
+<div class="container">
+    <div class="nav">
+        <a href="{{ url_for('index') }}">← Porcentômetro</a>
+        {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin</a>{% endif %}
+        <a href="{{ url_for('logout') }}">Sair</a>
+    </div>
+
+    <h1>Análise de Espécies Invasoras</h1>
+    <p class="subtitle">
+        Compara a lista oficial de espécies exóticas invasoras do ICMBio com os registros do 
+        <strong>CTFB</strong> para identificar quais já estão catalogadas.
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <div class="info-box">
+        Esta ferramenta baixa automaticamente a lista mais recente de espécies invasoras e a compara
+        com a base de dados do CTFB. A comparação é feita pelo binômio (Gênero + espécie).
+    </div>
+
+    <div class="card">
+        <form method="POST">
+            <button type="submit">Iniciar Comparação</button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

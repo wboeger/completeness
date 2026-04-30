@@ -35,6 +35,7 @@ db = SQLAlchemy(app)
 
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
 PLANILHA_EXTENDIDA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1zG0Ax_wKgg6UB9PgVXg29_qoZKDCE1Db/export?format=xlsx"
+INVASIVE_LIST_URL = "https://drive.google.com/uc?export=download&id=1_KHngk2dHKir5Phsndpp_eN_bydBYM3s"
 DATA_DATES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'data_dates.json')
 # --- End Configuration ---
 
@@ -184,6 +185,7 @@ def _load_session_taxa(user):
 
 # ── GBIF gap analysis ──────────────────────────────────────────────────────────
 GBIF_JOBS = {}   # job_id → dict with status/progress/result
+INVASIVE_JOBS = {} # job_id → dict with status/progress/result
 
 def _gbif_gap_worker(job_id, taxon_name, planilha_df):
     def update(progress, pct=None):
@@ -405,6 +407,99 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
 
     except Exception as e:
         GBIF_JOBS[job_id].update(status='error', error=str(e))
+
+def _invasive_gap_worker(job_id, planilha_df):
+    def update(progress, pct=None):
+        INVASIVE_JOBS[job_id]['progress'] = progress
+        if pct is not None:
+            INVASIVE_JOBS[job_id]['pct'] = pct
+
+    try:
+        INVASIVE_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                                 'result_path': None, 'error': None}
+
+        # ── Phase 1: download invasive species list ──
+        update('Baixando lista de espécies invasoras…', 5)
+        response = requests.get(INVASIVE_LIST_URL, timeout=60)
+        response.raise_for_status()
+        
+        from io import BytesIO
+        # We know from earlier that it's a TSV (even with .xlsx extension in the Drive link)
+        invasive_df = pd.read_csv(BytesIO(response.content), sep='\t')
+        
+        if invasive_df.empty:
+            INVASIVE_JOBS[job_id].update(status='error', error='Lista de espécies invasoras vazia.')
+            return
+
+        update(f'Lista carregada ({len(invasive_df)} registros). Comparando com CTFB…', 20)
+
+        # ── Phase 2: compare with CTFB ──
+        df = planilha_df.copy()
+        has_status = 'taxonomicstatus' in df.columns
+        sp_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        has_binomial = df.get('genus', pd.Series(dtype=str)).notna() & \
+                       df.get('specificepithet', pd.Series(dtype=str)).notna()
+
+        def make_binomials(mask):
+            sub = df[mask & has_binomial]
+            return set(
+                (sub['genus'].str.strip() + ' ' + sub['specificepithet'].str.strip())
+                .str.lower()
+            )
+
+        # Accepted names
+        if has_status:
+            ctfb_accepted = make_binomials(
+                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'))
+        else:
+            ctfb_accepted = make_binomials(sp_mask)
+
+        # Synonyms
+        if has_status:
+            ctfb_synonyms = make_binomials(
+                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() != 'NOME_ACEITO')
+            ) - ctfb_accepted
+        else:
+            ctfb_synonyms = set()
+
+        invasive_df['canonical_name'] = invasive_df['scientificName'].str.strip()
+        invasive_df['binomial'] = invasive_df['canonical_name'].str.lower()
+
+        in_ctfb     = invasive_df[invasive_df['binomial'].isin(ctfb_accepted)].copy()
+        as_synonym  = invasive_df[
+            ~invasive_df['binomial'].isin(ctfb_accepted) &
+             invasive_df['binomial'].isin(ctfb_synonyms)
+        ].copy()
+        not_in_ctfb = invasive_df[
+            ~invasive_df['binomial'].isin(ctfb_accepted) &
+            ~invasive_df['binomial'].isin(ctfb_synonyms)
+        ].copy()
+
+        # ── Phase 3: Save XLSX ──
+        update('Gerando arquivo XLSX…', 85)
+        result_path = os.path.join('/tmp', f'invasive_gap_{job_id}.xlsx')
+        
+        _export_cols = ['scientificName', 'genus', 'specificEpithet', 'datasetName']
+        export_cols = [c for c in _export_cols if c in invasive_df.columns]
+
+        with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
+            not_in_ctfb[export_cols].to_excel(writer, sheet_name='Ausentes_no_CTFB', index=False)
+            as_synonym[export_cols].to_excel(writer, sheet_name='Sinonimos_no_CTFB', index=False)
+            in_ctfb[export_cols].to_excel(writer, sheet_name='Presentes_no_CTFB', index=False)
+
+        INVASIVE_JOBS[job_id].update(
+            status='done', pct=100,
+            progress='Concluído.',
+            result_path=result_path,
+            n_total=len(invasive_df),
+            n_missing=len(not_in_ctfb),
+            n_synonym=len(as_synonym),
+            n_present=len(in_ctfb),
+            n_ctfb=len(ctfb_accepted),
+        )
+
+    except Exception as e:
+        INVASIVE_JOBS[job_id].update(status='error', error=str(e))
 
 def generate_completeness_chart(dataframe, category_column, title_label, sort_cols, output_path):
     """
@@ -1501,6 +1596,56 @@ def gbif_gap_poll(job_id):
     """JSON endpoint polled by the status page."""
     from flask import jsonify
     job = GBIF_JOBS.get(job_id, {'status': 'not_found'})
+    return jsonify({k: v for k, v in job.items() if k != 'result_path'})
+
+@app.route('/invasive_gap', methods=['GET', 'POST'])
+def invasive_gap():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    if request.method == 'POST':
+        if PLANILHA_DF is None:
+            flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
+            return redirect(url_for('invasive_gap'))
+        job_id = uuid.uuid4().hex
+        t = threading.Thread(target=_invasive_gap_worker,
+                             args=(job_id, PLANILHA_DF.copy()),
+                             daemon=True)
+        t.start()
+        return redirect(url_for('invasive_gap_status', job_id=job_id))
+    # Reuse gbif_gap template or create a new one
+    return render_template(tmpl('invasive_gap'),
+                           username=user.username, is_admin=user.is_admin,
+                           data_loaded=DATA_LOADED_SUCCESSFULLY)
+
+@app.route('/invasive_gap/status/<job_id>')
+def invasive_gap_status(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    job = INVASIVE_JOBS.get(job_id)
+    if job is None:
+        flash('Job não encontrado.', 'danger')
+        return redirect(url_for('invasive_gap'))
+    return render_template(tmpl('invasive_gap_status'),
+                           job=job, job_id=job_id,
+                           username=user.username, is_admin=user.is_admin)
+
+@app.route('/invasive_gap/download/<job_id>')
+def invasive_gap_download(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    job = INVASIVE_JOBS.get(job_id)
+    if not job or job['status'] != 'done' or not job.get('result_path'):
+        flash('Resultado não disponível.', 'danger')
+        return redirect(url_for('invasive_gap'))
+    return send_file(job['result_path'], as_attachment=True,
+                     download_name=f'invasive_gap_{job_id[:8]}.xlsx')
+
+@app.route('/invasive_gap/poll/<job_id>')
+def invasive_gap_poll(job_id):
+    from flask import jsonify
+    job = INVASIVE_JOBS.get(job_id, {'status': 'not_found'})
     return jsonify({k: v for k, v in job.items() if k != 'result_path'})
 
 if __name__ == '__main__':

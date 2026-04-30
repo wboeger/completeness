@@ -120,6 +120,16 @@
                     GBIF and identifies species absent from the catalogue.
                 </div>
             </label>
+            <label class="type-card" id="card-invasive" style="grid-column: span 2;">
+                <input type="radio" name="analysis_type" value="invasive"
+                       onchange="selectType('invasive')">
+                <div class="card-icon">👾</div>
+                <div class="card-title">Invasive Species</div>
+                <div class="card-desc">
+                    Compares the official ICMBio list of invasive exotic species with the CTFB
+                    to identify cataloging gaps.
+                </div>
+            </label>
         </div>
 
         <p class="gbif-note" id="gbifNote">
@@ -159,16 +169,31 @@
 <script>
 const ACTIONS = {
     data: "{{ url_for('analyze_taxon') }}",
-    gbif: "{{ url_for('gbif_gap') }}"
+    gbif: "{{ url_for('gbif_gap') }}",
+    invasive: "{{ url_for('invasive_gap') }}"
 };
 
 function selectType(type) {
     document.getElementById('card-data').classList.toggle('selected', type === 'data');
     document.getElementById('card-gbif').classList.toggle('selected', type === 'gbif');
+    document.getElementById('card-invasive').classList.toggle('selected', type === 'invasive');
     document.getElementById('mainForm').action = ACTIONS[type];
     document.getElementById('gbifNote').classList.toggle('visible', type === 'gbif');
-    document.getElementById('submitBtn').textContent =
-        type === 'gbif' ? 'Start GBIF analysis' : 'Analyse';
+
+    const taxonField = document.getElementById('taxon');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (type === 'invasive') {
+        taxonField.required = false;
+        taxonField.disabled = true;
+        taxonField.placeholder = "Not applicable for invasive species";
+        submitBtn.textContent = 'Start Invasive analysis';
+    } else {
+        taxonField.required = true;
+        taxonField.disabled = false;
+        taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
+        submitBtn.textContent = type === 'gbif' ? 'Start GBIF analysis' : 'Analyse';
+    }
 }
 </script>
 </body>

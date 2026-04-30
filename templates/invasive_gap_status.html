@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Análise de Invasoras em andamento — Porcentômetro</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; margin: 0; padding: 2rem; }
+        .container { max-width: 700px; margin: 0 auto; }
+        h1 { color: #2c3e50; margin-bottom: .3rem; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.08); padding: 2rem; margin-bottom: 1.5rem; }
+        .progress-bar-wrap { background: #ecf0f1; border-radius: 20px; height: 18px; overflow: hidden; margin: 1rem 0; }
+        .progress-bar { background: #e67e22; height: 100%; border-radius: 20px; transition: width .4s ease; }
+        .status-text { font-size: .95rem; color: #555; min-height: 1.4rem; }
+        .done-box { background: #eafaf1; border: 1px solid #a9dfbf; border-radius: 6px; padding: 1.2rem 1.5rem; }
+        .done-box h2 { color: #1e8449; margin: 0 0 .8rem; }
+        .stat { display: inline-block; margin-right: 2rem; margin-bottom: 1rem; }
+        .stat .n { font-size: 1.6rem; font-weight: 700; color: #2c3e50; }
+        .stat .lbl { font-size: .78rem; color: #7f8c8d; display: block; }
+        .btn-dl { display: inline-block; margin-top: 1.2rem; background: #27ae60; color: white; padding: .7rem 2rem;
+                  border-radius: 5px; font-weight: 600; text-decoration: none; font-size: 1rem; }
+        .btn-dl:hover { background: #219a52; }
+        .error-box { background: #fde8e8; border: 1px solid #f5c6c6; border-radius: 6px; padding: 1rem 1.5rem; color: #c0392b; }
+        .nav { display: flex; gap: 1rem; margin-bottom: 1.5rem; font-size: .9rem; }
+        .nav a { color: #2980b9; text-decoration: none; }
+        .nav a:hover { text-decoration: underline; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 3px solid #ccc;
+                   border-top-color: #e67e22; border-radius: 50%; animation: spin .7s linear infinite;
+                   vertical-align: middle; margin-right: .4rem; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+<div style="position:fixed;top:.7rem;right:1rem;font-size:.8rem;z-index:100;">
+  <a href="{{ url_for('set_lang', code='pt') }}" style="font-weight:bold;color:#2c3e50;text-decoration:none;padding:.15rem .4rem;background:#e8ecf0;border-radius:3px;">PT</a>
+  <a href="{{ url_for('set_lang', code='en') }}" style="color:#7f8c8d;text-decoration:none;padding:.15rem .4rem;">EN</a>
+</div>
+<div class="container">
+    <div class="nav">
+        <a href="{{ url_for('invasive_gap') }}">← Nova análise</a>
+        <a href="{{ url_for('index') }}">Porcentômetro</a>
+        <a href="{{ url_for('logout') }}">Sair</a>
+    </div>
+
+    <h1>Invasoras × CTFB</h1>
+
+    <div class="card" id="statusCard">
+        {% if job.status == 'done' %}
+        <div class="done-box">
+            <h2>Análise concluída!</h2>
+            <div style="margin-bottom:.8rem; display:flex; flex-wrap:wrap; gap:1.2rem;">
+                <span class="stat"><span class="n">{{ job.n_total }}</span><span class="lbl">espécies invasoras<br>processadas</span></span>
+                <span class="stat"><span class="n" style="color:#c0392b">{{ job.n_missing }}</span><span class="lbl">ausentes no CTFB</span></span>
+                <span class="stat"><span class="n" style="color:#e67e22">{{ job.n_synonym }}</span><span class="lbl">presentes como<br>sinônimo no CTFB</span></span>
+                <span class="stat"><span class="n" style="color:#27ae60">{{ job.n_present }}</span><span class="lbl">presentes (nome<br>aceito no CTFB)</span></span>
+            </div>
+            <a class="btn-dl" href="{{ url_for('invasive_gap_download', job_id=job_id) }}">
+                Baixar XLSX (3 abas)
+            </a>
+            <div style="font-size:.78rem; color:#7f8c8d; margin-top:.7rem;">
+                O XLSX contém: <em>Ausentes_no_CTFB</em>, <em>Sinonimos_no_CTFB</em>, <em>Presentes_no_CTFB</em>.
+            </div>
+        </div>
+
+        {% elif job.status == 'error' %}
+        <div class="error-box">
+            <strong>Erro na análise:</strong> {{ job.error }}
+        </div>
+
+        {% else %}
+        <div>
+            <span class="spinner"></span>
+            <strong>Processando…</strong> a página atualiza automaticamente.
+        </div>
+        <div class="progress-bar-wrap" style="margin-top:1rem">
+            <div class="progress-bar" id="bar" style="width: {{ job.pct }}%"></div>
+        </div>
+        <div class="status-text" id="statusText">{{ job.progress }}</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if job.status == 'running' %}
+<script>
+(function poll() {
+    setTimeout(function() {
+        fetch("{{ url_for('invasive_gap_poll', job_id=job_id) }}")
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('bar').style.width = (data.pct || 0) + '%';
+                document.getElementById('statusText').textContent = data.progress || '';
+                if (data.status === 'done' || data.status === 'error') {
+                    location.reload();
+                } else {
+                    poll();
+                }
+            })
+            .catch(() => poll());
+    }, 2000);
+})();
+</script>
+{% endif %}
+</body>
+</html>
