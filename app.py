@@ -393,10 +393,20 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
             in_ctfb[_export_cols].rename(columns=_rename).to_excel(
                 writer, sheet_name='Presentes_no_CTFB', index=False)
 
+        # ── Create ZIP (including manuals) ──
+        zip_path = os.path.join('/tmp', f'gbif_gap_{job_id}.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(result_path, f'gbif_gap_{taxon_name.replace(" ", "_")}.xlsx')
+            # Include manuals if they exist
+            if os.path.exists('manual_pt.pdf'):
+                zf.write('manual_pt.pdf', 'manual_pt.pdf')
+            if os.path.exists('manual_en.pdf'):
+                zf.write('manual_en.pdf', 'manual_en.pdf')
+
         GBIF_JOBS[job_id].update(
             status='done', pct=100,
             progress='Concluído.',
-            result_path=result_path,
+            result_path=zip_path,
             taxon_name=taxon_name,
             n_gbif=len(gbif_df),
             n_missing=len(not_in_ctfb),
@@ -487,10 +497,19 @@ def _invasive_gap_worker(job_id, planilha_df):
             as_synonym[export_cols].to_excel(writer, sheet_name='Sinonimos_no_CTFB', index=False)
             in_ctfb[export_cols].to_excel(writer, sheet_name='Presentes_no_CTFB', index=False)
 
+        # ── Create ZIP (including manuals) ──
+        zip_path = os.path.join('/tmp', f'invasive_gap_{job_id}.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(result_path, f'invasive_gap_{job_id[:8]}.xlsx')
+            if os.path.exists('manual_pt.pdf'):
+                zf.write('manual_pt.pdf', 'manual_pt.pdf')
+            if os.path.exists('manual_en.pdf'):
+                zf.write('manual_en.pdf', 'manual_en.pdf')
+
         INVASIVE_JOBS[job_id].update(
             status='done', pct=100,
             progress='Concluído.',
-            result_path=result_path,
+            result_path=zip_path,
             n_total=len(invasive_df),
             n_missing=len(not_in_ctfb),
             n_synonym=len(as_synonym),
@@ -1090,6 +1109,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         with zipfile.ZipFile(zip_filepath, 'w') as zf:
             for file_path in generated_files:
                 zf.write(file_path, os.path.basename(file_path))
+            # Include manuals
+            if os.path.exists('manual_pt.pdf'):
+                zf.write('manual_pt.pdf', 'manual_pt.pdf')
+            if os.path.exists('manual_en.pdf'):
+                zf.write('manual_en.pdf', 'manual_en.pdf')
 
         shutil.rmtree(temp_dir)
 
@@ -1589,7 +1613,7 @@ def gbif_gap_download(job_id):
         return redirect(url_for('gbif_gap'))
     taxon_safe = job['taxon_name'].replace(' ', '_').replace('/', '-')
     return send_file(job['result_path'], as_attachment=True,
-                     download_name=f'gbif_gap_{taxon_safe}.xlsx')
+                     download_name=f'gbif_gap_{taxon_safe}.zip')
 
 @app.route('/gbif_gap/poll/<job_id>')
 def gbif_gap_poll(job_id):
@@ -1640,7 +1664,7 @@ def invasive_gap_download(job_id):
         flash('Resultado não disponível.', 'danger')
         return redirect(url_for('invasive_gap'))
     return send_file(job['result_path'], as_attachment=True,
-                     download_name=f'invasive_gap_{job_id[:8]}.xlsx')
+                     download_name=f'invasive_gap_{job_id[:8]}.zip')
 
 @app.route('/invasive_gap/poll/<job_id>')
 def invasive_gap_poll(job_id):
