@@ -188,16 +188,18 @@ function selectType(type) {
     const taxonField = document.getElementById('taxon');
     const submitBtn = document.getElementById('submitBtn');
     
+    taxonField.required = true;
+    taxonField.disabled = false;
+    
     if (type === 'invasive') {
-        taxonField.required = false;
-        taxonField.disabled = true;
-        taxonField.placeholder = "Não aplicável para invasoras";
-        submitBtn.textContent = 'Iniciar análise de Invasoras';
-    } else {
-        taxonField.required = true;
-        taxonField.disabled = false;
+        taxonField.placeholder = "Táxon (ex: Animalia, Chordata...)";
+        submitBtn.textContent = 'Analisar Invasoras';
+    } else if (type === 'gbif') {
         taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
-        submitBtn.textContent = type === 'gbif' ? 'Iniciar análise GBIF' : 'Analisar';
+        submitBtn.textContent = 'Iniciar análise GBIF';
+    } else {
+        taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
+        submitBtn.textContent = 'Analisar';
     }
 }
 </script>
