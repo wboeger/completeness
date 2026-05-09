@@ -329,7 +329,7 @@ def _load_session_taxa(user):
     """Populate session['allowed_taxa'] from pesquisadores sheet for the given user."""
     if PESQUISADORES_DF is not None and 'login' in PESQUISADORES_DF.columns:
         row = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == user.username.lower()]
-        if not row.empty:
+        if not row.empty and 'táxons' in PESQUISADORES_DF.columns:
             taxa_str = row.iloc[0]['táxons']
             if isinstance(taxa_str, str):
                 session['allowed_taxa'] = sorted(
@@ -793,7 +793,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 mask |= (planilha_df[rank].str.lower() == taxon_filter.lower())
         filtered_data = planilha_df[mask].copy()
         if filtered_data.empty:
-            return None
+            return None, None
 
         # Determine which rank the input taxon belongs to
         taxon_rank_col = None
@@ -816,7 +816,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                       else pd.Series(True, index=filtered_data.index)
         accepted = filtered_data[rank_mask & status_mask].copy()
         if accepted.empty:
-            return None
+            return None, None
 
         # If a species has accepted subspecies, drop the species-level row and
         # use only its subspecies as the units of analysis.
@@ -838,7 +838,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             species_data = accepted.copy()
 
         if species_data.empty:
-            return None
+            return None, None
 
         # Deduplicate by canonical epithet key:
         # 1. Rows with the same epithet key AND the same namepublishedinyear are merged
@@ -1189,14 +1189,17 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
 
         # --- Researcher lookup ---
         # pesq_map: Táxons value → nome_completo (full name, not login username)
-        pesq_lookup = pesquisadores_df.dropna(subset=['táxons']).copy()
-        pesq_lookup['táxons'] = pesq_lookup['táxons'].astype(str).str.split(r'[;,]', regex=True)
-        pesq_lookup = pesq_lookup.explode('táxons')
-        pesq_lookup['táxons'] = pesq_lookup['táxons'].str.strip()
-        pesq_lookup = pesq_lookup[pesq_lookup['táxons'] != '']
-        pesq_map = (pesq_lookup.groupby('táxons')['nome_completo']
-                               .apply(lambda x: '; '.join(x.dropna().unique()))
-                               .to_dict())
+        if pesquisadores_df is not None and 'táxons' in pesquisadores_df.columns and 'nome_completo' in pesquisadores_df.columns:
+            pesq_lookup = pesquisadores_df.dropna(subset=['táxons']).copy()
+            pesq_lookup['táxons'] = pesq_lookup['táxons'].astype(str).str.split(r'[;,]', regex=True)
+            pesq_lookup = pesq_lookup.explode('táxons')
+            pesq_lookup['táxons'] = pesq_lookup['táxons'].str.strip()
+            pesq_lookup = pesq_lookup[pesq_lookup['táxons'] != '']
+            pesq_map = (pesq_lookup.groupby('táxons')['nome_completo']
+                                   .apply(lambda x: '; '.join(x.dropna().unique()))
+                                   .to_dict())
+        else:
+            pesq_map = {}
 
         def find_researcher(row, search_ranks):
             """Return nome_completo of the closest researcher going up the hierarchy.
