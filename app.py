@@ -209,14 +209,10 @@ def load_data_on_startup():
         
         if PESQUISADORES_DF is not None:
             import unicodedata as _ud
-            def _ascii(s):
-                return _ud.normalize('NFKD', s).encode('ascii', 'ignore').decode().lower().strip()
-            PESQUISADORES_DF.columns = [c.lower().strip() for c in PESQUISADORES_DF.columns]
-            # If 'táxons' absent but accent-stripped form 'taxons' present, rename it
-            if 'táxons' not in PESQUISADORES_DF.columns:
-                rename = {c: 'táxons' for c in PESQUISADORES_DF.columns if _ascii(c) == 'taxons'}
-                if rename:
-                    PESQUISADORES_DF.rename(columns=rename, inplace=True)
+            # NFC-normalize so decomposed accents (from Google Sheets) match source literals
+            PESQUISADORES_DF.columns = [
+                _ud.normalize('NFC', c).lower().strip() for c in PESQUISADORES_DF.columns
+            ]
             print(f"  {len(PESQUISADORES_DF)} researchers loaded. columns={list(PESQUISADORES_DF.columns)}")
     except Exception as e:
         print(f"ERROR loading pesquisadores: {e}")
