@@ -236,11 +236,15 @@ def load_data_on_startup():
             PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
             # Normalize Darwin Core English values → internal Portuguese codes
             if 'taxonrank' in PLANILHA_DF.columns:
+                _raw_ranks = PLANILHA_DF['taxonrank'].str.upper().str.strip().value_counts().to_dict()
+                print(f"  taxonrank raw values: {_raw_ranks}")
                 PLANILHA_DF['taxonrank'] = PLANILHA_DF['taxonrank'].str.upper().str.strip().replace({
                     'SPECIES': 'ESPECIE', 'SUBSPECIES': 'SUBESPECIE',
                     'VARIETY': 'VARIEDADE', 'FORM': 'FORMA',
                 })
             if 'taxonomicstatus' in PLANILHA_DF.columns:
+                _raw_statuses = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().value_counts().to_dict()
+                print(f"  taxonomicstatus raw values: {_raw_statuses}")
                 PLANILHA_DF['taxonomicstatus'] = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().replace({
                     'ACCEPTED': 'NOME_ACEITO', 'SYNONYM': 'SINONIMO',
                     'HOMOTYPICSYNONYM': 'SINONIMO', 'HETEROTYPICSYNONYM': 'SINONIMO',
@@ -843,10 +847,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
         _rank_vals = _taxonrank_norm.value_counts().to_dict()
-        _dbg(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={(rank_mask & status_mask).sum()} taxonrank_vals={_rank_vals}")
+        _status_vals = filtered_data['taxonomicstatus'].str.upper().str.strip().value_counts().to_dict() if 'taxonomicstatus' in filtered_data.columns else {}
+        _dbg(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={(rank_mask & status_mask).sum()} taxonrank_vals={_rank_vals} status_vals={_status_vals}")
         accepted = filtered_data[rank_mask & status_mask].copy()
         if accepted.empty:
-            diag = f"found {len(filtered_data)} rows but 0 accepted species/subspecies. taxonrank_vals={_rank_vals}"
+            diag = f"found {len(filtered_data)} rows but 0 accepted species/subspecies. taxonrank_vals={_rank_vals} status_vals={_status_vals}"
             _dbg(f"[analysis] '{taxon_filter}': {diag}")
             return None, None, diag
 
