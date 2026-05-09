@@ -44,7 +44,7 @@ def allow_google_sites_framing(response):
         "frame-ancestors 'self' https://sites.google.com https://*.googleusercontent.com"
     )
     # Remove any X-Frame-Options header that would block framing.
-    response.headers.discard('X-Frame-Options')
+    response.headers.remove('X-Frame-Options')
     return response
 
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
