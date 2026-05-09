@@ -278,8 +278,8 @@ def build_english(path):
     story += [PageBreak(), Paragraph('2. Data Completeness Analysis', S['h1']), rule()]
     story.append(Paragraph(
         'This analysis evaluates the fraction of mandatory fields filled in for each '
-        'accepted species (<i>taxonomicstatus = NOME_ACEITO</i>, <i>taxonrank = ESPECIE</i> '
-        'or <i>SUBESPECIE</i>) within the requested taxon. '
+        'accepted species (<i>taxonomicstatus = ACCEPTED</i>, <i>taxonrank = SPECIES</i> '
+        'or <i>SUBSPECIES</i>) within the requested taxon. '
         '<b>Subspecies rule:</b> when a species has one or more accepted subspecies, '
         'the species-level row is excluded and only its subspecies are used as analysis '
         'units. Results are aggregated by family, order, class, sub-class, and phylum. '
@@ -394,7 +394,7 @@ def build_english(path):
     story += [Paragraph('2.4  Subspecies Rule', S['h2'])]
     story.append(Paragraph(
         'When a species has at least one accepted subspecies '
-        '(<i>taxonrank = SUBESPECIE, taxonomicstatus = NOME_ACEITO</i>), the '
+        '(<i>taxonrank = SUBSPECIES, taxonomicstatus = ACCEPTED</i>), the '
         'species-level row is <b>excluded</b> from the analysis and its accepted '
         'subspecies are used as the analysis units instead. This ensures that the '
         'completeness is measured at the finest accepted resolution available for '
@@ -460,8 +460,8 @@ def build_english(path):
          'Fossil / extinct species (<i>extinct = true</i> in GBIF) are excluded at '
          'this stage.'),
         ('Phase 4 — Comparison with CTFB',
-         'CTFB species with <i>taxonomicstatus = NOME_ACEITO</i> and '
-         '<i>taxonrank = ESPECIE</i> are extracted as lowercase canonical binomials. '
+         'CTFB species with <i>taxonomicstatus = ACCEPTED</i> and '
+         '<i>taxonrank = SPECIES</i> are extracted as lowercase canonical binomials. '
          'Each GBIF binomial is classified as: <b>present</b> (matched to an accepted '
          'name), <b>synonym</b> (matched to a synonym in CTFB), or '
          '<b>absent</b> (not found in any form).'),
@@ -477,7 +477,7 @@ def build_english(path):
         'Key caveats:', S['body']))
     for b in [
         'Species with identical binomials in GBIF and CTFB are counted as present, regardless of author or year.',
-        'A GBIF name matched to a CTFB synonym (non-NOME_ACEITO record with the same binomial) is classified as <i>Sinonimos_no_CTFB</i>, not as absent.',
+        'A GBIF name matched to a CTFB synonym (non-ACCEPTED record with the same binomial) is classified as <i>Sinonimos_no_CTFB</i>, not as absent.',
         'Nomenclatural discrepancies — genus synonymy, spelling variants, different taxonomic treatments — cause a species to appear "absent" even if represented under a different name in CTFB. Manual review is recommended.',
         'Infraspecific taxa (subspecies, varieties) are excluded from both sides of the comparison.',
         'Fossil taxa are excluded (GBIF <i>extinct = true</i>).',
@@ -492,13 +492,13 @@ def build_english(path):
          'Columns: phylum_gbif, classe_gbif, ordem_gbif, familia_gbif, '
          'nome_cientifico, gbif_species_key. Sorted phylum → class → order → family → name.'),
         ('Sinonimos_no_CTFB',
-         'GBIF species whose binomial matches a synonym (non-NOME_ACEITO) record in CTFB. '
+         'GBIF species whose binomial matches a synonym (non-ACCEPTED) record in CTFB. '
          'Same columns as Ausentes_no_CTFB.'),
         ('Resumo_por_Familia',
          'Summary per family: total GBIF species, absent count, synonym count, '
          'present count. Sorted by absent count descending.'),
         ('Presentes_no_CTFB',
-         'GBIF species matched to a CTFB NOME_ACEITO record. Useful for coverage '
+         'GBIF species matched to a CTFB ACCEPTED record. Useful for coverage '
          'cross-checking.'),
     ], S))
 
@@ -710,8 +710,8 @@ def build_portuguese(path):
     story += [PageBreak(), Paragraph('2. Análise de Completude dos Dados', S['h1']), rule()]
     story.append(Paragraph(
         'Esta análise avalia a fração de campos obrigatórios preenchidos para cada '
-        'espécie aceita (<i>taxonomicstatus = NOME_ACEITO</i>, '
-        '<i>taxonrank = ESPECIE</i> ou <i>SUBESPECIE</i>) dentro do táxon solicitado. '
+        'espécie aceita (<i>taxonomicstatus = ACCEPTED</i>, '
+        '<i>taxonrank = SPECIES</i> ou <i>SUBSPECIES</i>) dentro do táxon solicitado. '
         '<b>Regra de subespécies:</b> quando uma espécie possui subespécies aceitas, '
         'a linha da espécie é excluída e apenas as subespécies são usadas como '
         'unidades de análise. Os resultados são agregados por família, ordem, classe, '
@@ -829,7 +829,7 @@ def build_portuguese(path):
     story += [Paragraph('2.4  Regra de Subespécies', S['h2'])]
     story.append(Paragraph(
         'Quando uma espécie possui pelo menos uma subespécie aceita '
-        '(<i>taxonrank = SUBESPECIE, taxonomicstatus = NOME_ACEITO</i>), a linha '
+        '(<i>taxonrank = SUBSPECIES, taxonomicstatus = ACCEPTED</i>), a linha '
         'da espécie é <b>excluída</b> da análise e suas subespécies aceitas são '
         'usadas como unidades de análise. Isso garante que a completude seja medida '
         'na resolução mais fina disponível para cada linhagem.', S['body']))
@@ -895,8 +895,8 @@ def build_portuguese(path):
          'Espécies fósseis/extintas (<i>extinct = true</i> no GBIF) são excluídas '
          'nesta fase.'),
         ('Fase 4 — Comparação com o CTFB',
-         'As espécies do CTFB com <i>taxonomicstatus = NOME_ACEITO</i> e '
-         '<i>taxonrank = ESPECIE</i> são extraídas como binômios canônicos em '
+         'As espécies do CTFB com <i>taxonomicstatus = ACCEPTED</i> e '
+         '<i>taxonrank = SPECIES</i> são extraídas como binômios canônicos em '
          'minúsculas. Cada binômio do GBIF é classificado como: <b>presente</b> '
          '(corresponde a um nome aceito), <b>sinônimo</b> (corresponde a um '
          'sinônimo no CTFB) ou <b>ausente</b> (não encontrado de nenhuma forma).'),
@@ -912,7 +912,7 @@ def build_portuguese(path):
         'Pontos importantes:', S['body']))
     for b in [
         'Espécies com binômios idênticos no GBIF e no CTFB são contadas como presentes, independentemente do autor ou ano.',
-        'Um nome do GBIF que corresponde a um sinônimo (registro não-NOME_ACEITO) no CTFB é classificado em <i>Sinonimos_no_CTFB</i>, não como ausente.',
+        'Um nome do GBIF que corresponde a um sinônimo (registro não-ACCEPTED) no CTFB é classificado em <i>Sinonimos_no_CTFB</i>, não como ausente.',
         'Discrepâncias nomenclaturais — sinonímia de gênero, variações ortográficas, tratamentos taxonômicos distintos — farão uma espécie aparecer como "ausente" mesmo que esteja representada sob outro nome no CTFB. Recomenda-se revisão manual.',
         'Táxons infraespecíficos (subespécies, variedades) são excluídos de ambos os lados.',
         'Espécies fósseis são excluídas (<i>extinct = true</i> no GBIF).',
@@ -927,13 +927,13 @@ def build_portuguese(path):
          'Colunas: phylum_gbif, classe_gbif, ordem_gbif, familia_gbif, '
          'nome_cientifico, gbif_species_key. Ordenado por filo → classe → ordem → família → nome.'),
         ('Sinonimos_no_CTFB',
-         'Espécies GBIF cujo binômio corresponde a um sinônimo (não-NOME_ACEITO) no CTFB. '
+         'Espécies GBIF cujo binômio corresponde a um sinônimo (não-ACCEPTED) no CTFB. '
          'Mesmas colunas de Ausentes_no_CTFB.'),
         ('Resumo_por_Familia',
          'Resumo por família: total de espécies GBIF, ausentes, sinônimos e presentes. '
          'Ordenado por número de ausentes (decrescente).'),
         ('Presentes_no_CTFB',
-         'Espécies GBIF correspondidas a um registro NOME_ACEITO no CTFB. '
+         'Espécies GBIF correspondidas a um registro ACCEPTED no CTFB. '
          'Útil para verificação de cobertura.'),
     ], S, col1='Aba', col2='Conteúdo'))
 

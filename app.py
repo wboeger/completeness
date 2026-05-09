@@ -239,35 +239,37 @@ def load_data_on_startup():
                 _raw_ranks = PLANILHA_DF['taxonrank'].str.upper().str.strip().value_counts().to_dict()
                 print(f"  taxonrank raw values: {_raw_ranks}")
                 PLANILHA_DF['taxonrank'] = PLANILHA_DF['taxonrank'].str.upper().str.strip().replace({
-                    'KINGDOM':      'REINO',
-                    'PHYLUM':       'FILO',
-                    'SUBPHYLUM':    'SUB_FILO',
-                    'SUPERCLASS':   'SUPER_CLASSE',
-                    'CLASS':        'CLASSE',
-                    'SUBCLASS':     'SUB_CLASSE',
-                    'INFRACLASS':   'INFRA_CLASSE',
-                    'SUPERORDER':   'SUPER_ORDEM',
-                    'ORDER':        'ORDEM',
-                    'SUBORDER':     'SUB_ORDEM',
-                    'INFRAORDER':   'INFRA_ORDEM',
-                    'SUPERFAMILY':  'SUPER_FAMILIA',
-                    'FAMILY':       'FAMILIA',
-                    'SUBFAMILY':    'SUB_FAMILIA',
-                    'TRIBE':        'TRIBO',
-                    'SUBTRIBE':     'SUB_TRIBO',
-                    'GENUS':        'GENERO',
-                    'SUBGENUS':     'SUB_GENERO',
-                    'SPECIES':      'ESPECIE',
-                    'SUBSPECIES':   'SUBESPECIE',
-                    'VARIETY':      'VARIEDADE',
-                    'FORM':         'FORMA',
+                    'REINO':        'KINGDOM',
+                    'FILO':         'PHYLUM',
+                    'SUB_FILO':     'SUBPHYLUM',
+                    'SUPER_CLASSE': 'SUPERCLASS',
+                    'CLASSE':       'CLASS',
+                    'SUB_CLASSE':   'SUBCLASS',
+                    'INFRA_CLASSE': 'INFRACLASS',
+                    'SUPER_ORDEM':  'SUPERORDER',
+                    'ORDEM':        'ORDER',
+                    'SUB_ORDEM':    'SUBORDER',
+                    'INFRA_ORDEM':  'INFRAORDER',
+                    'SUPER_FAMILIA':'SUPERFAMILY',
+                    'FAMILIA':      'FAMILY',
+                    'SUB_FAMILIA':  'SUBFAMILY',
+                    'TRIBO':        'TRIBE',
+                    'SUB_TRIBO':    'SUBTRIBE',
+                    'GENERO':       'GENUS',
+                    'SUB_GENERO':   'SUBGENUS',
+                    'SPECIES':      'SPECIES',
+                    'SUBSPECIES':   'SUBSPECIES',
+                    'VARIEDADE':    'VARIETY',
+                    'FORMA':        'FORM',
                 })
             if 'taxonomicstatus' in PLANILHA_DF.columns:
                 _raw_statuses = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().value_counts().to_dict()
                 print(f"  taxonomicstatus raw values: {_raw_statuses}")
                 PLANILHA_DF['taxonomicstatus'] = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().replace({
-                    'ACCEPTED': 'NOME_ACEITO', 'SYNONYM': 'SINONIMO',
-                    'HOMOTYPICSYNONYM': 'SINONIMO', 'HETEROTYPICSYNONYM': 'SINONIMO',
+                    'ACCEPTED':         'ACCEPTED',
+                    'SYNONYM':            'SYNONYM',
+                    'HOMOTYPICSYNONYM':    'SYNONYM',
+                    'HETEROTYPICSYNONYM':  'SYNONYM',
                 })
             if 'establishmentmeans' in PLANILHA_DF.columns:
                 PLANILHA_DF['establishmentmeans'] = PLANILHA_DF['establishmentmeans'].str.upper().str.strip().replace({
@@ -510,7 +512,7 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
         update('Comparando com CTFB…', 88)
         df = planilha_df.copy()
         has_status = 'taxonomicstatus' in df.columns
-        sp_mask = df['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        sp_mask = df['taxonrank'].str.upper().str.strip() == 'SPECIES'
         has_binomial = df.get('genus', pd.Series(dtype=str)).notna() & \
                        df.get('specificepithet', pd.Series(dtype=str)).notna()
 
@@ -524,14 +526,14 @@ def _gbif_gap_worker(job_id, taxon_name, planilha_df):
         # Accepted names
         if has_status:
             ctfb_accepted = make_binomials(
-                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'))
+                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() == 'ACCEPTED'))
         else:
             ctfb_accepted = make_binomials(sp_mask)
 
-        # Synonyms: any other status (SINONIMO, NOME_DUVIDOSO, etc.)
+        # Synonyms: any other status (SYNONYM, NOME_DUVIDOSO, etc.)
         if has_status:
             ctfb_synonyms = make_binomials(
-                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() != 'NOME_ACEITO')
+                sp_mask & (df['taxonomicstatus'].str.upper().str.strip() != 'ACCEPTED')
             ) - ctfb_accepted
         else:
             ctfb_synonyms = set()
@@ -676,7 +678,7 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
         # Identify all binomials (accepted and synonyms) in CTFB for this taxon
         # to filter the invasive list.
         def get_all_binomials(dataframe):
-            sp_m = dataframe['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+            sp_m = dataframe['taxonrank'].str.upper().str.strip() == 'SPECIES'
             has_bin = dataframe.get('genus', pd.Series(dtype=str)).notna() & \
                       dataframe.get('specificepithet', pd.Series(dtype=str)).notna()
             sub = dataframe[sp_m & has_bin]
@@ -703,7 +705,7 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
 
         # Now proceed with the standard comparison using the filtered CTFB subset
         has_status = 'taxonomicstatus' in df_filtered.columns
-        sp_mask = df_filtered['taxonrank'].str.upper().str.strip() == 'ESPECIE'
+        sp_mask = df_filtered['taxonrank'].str.upper().str.strip() == 'SPECIES'
         has_binomial = df_filtered.get('genus', pd.Series(dtype=str)).notna() & \
                        df_filtered.get('specificepithet', pd.Series(dtype=str)).notna()
 
@@ -717,14 +719,14 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
         # Accepted names
         if has_status:
             ctfb_accepted = make_binomials(
-                sp_mask & (df_filtered['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO'))
+                sp_mask & (df_filtered['taxonomicstatus'].str.upper().str.strip() == 'ACCEPTED'))
         else:
             ctfb_accepted = make_binomials(sp_mask)
 
         # Synonyms
         if has_status:
             ctfb_synonyms = make_binomials(
-                sp_mask & (df_filtered['taxonomicstatus'].str.upper().str.strip() != 'NOME_ACEITO')
+                sp_mask & (df_filtered['taxonomicstatus'].str.upper().str.strip() != 'ACCEPTED')
             ) - ctfb_accepted
         else:
             ctfb_synonyms = set()
@@ -868,8 +870,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             return RANK_HIERARCHY.index(level) > taxon_rank_idx
 
         _taxonrank_norm = filtered_data['taxonrank'].str.upper().str.strip()
-        rank_mask   = _taxonrank_norm.isin(['ESPECIE', 'SUBESPECIE'])
-        status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
+        rank_mask   = _taxonrank_norm.isin(['SPECIES', 'SUBSPECIES'])
+        status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'ACCEPTED' \
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
         _rank_vals = _taxonrank_norm.value_counts().to_dict()
@@ -890,11 +892,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             ).str.lower()
             _accepted_rank = accepted['taxonrank'].str.upper().str.strip()
             subsp_binomials = set(
-                accepted.loc[_accepted_rank == 'SUBESPECIE', '_binomial']
+                accepted.loc[_accepted_rank == 'SUBSPECIES', '_binomial']
             )
             # Keep row if it is a subspecies OR if its binomial has no subspecies
             species_data = accepted[
-                (_accepted_rank == 'SUBESPECIE') |
+                (_accepted_rank == 'SUBSPECIES') |
                 (~accepted['_binomial'].isin(subsp_binomials))
             ].copy()
             species_data.drop(columns=['_binomial'], inplace=True)
@@ -1397,8 +1399,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         summary = {
             'taxon':        taxon_filter,
             'n_spp_ctfb':   int(len(species_data)),
-            'n_species':    int((species_data['taxonrank'].str.upper().str.strip() == 'ESPECIE').sum()),
-            'n_subsp':      int((species_data['taxonrank'].str.upper().str.strip() == 'SUBESPECIE').sum()),
+            'n_species':    int((species_data['taxonrank'].str.upper().str.strip() == 'SPECIES').sum()),
+            'n_subsp':      int((species_data['taxonrank'].str.upper().str.strip() == 'SUBSPECIES').sum()),
             'mean_complete': round(float(species_data['completeness'].mean()), 1),
             'n_families':   int(species_data['family'].nunique())   if 'family'  in species_data.columns else 0,
             'n_orders':     int(species_data['order'].nunique())    if 'order'   in species_data.columns else 0,
