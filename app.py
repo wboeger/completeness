@@ -31,7 +31,21 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Allow session cookies to be sent inside cross-origin iframes (e.g. Google Sites).
+# SameSite=None requires Secure=True (HTTPS), which is always true on Railway.
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = True
 db = SQLAlchemy(app)
+
+@app.after_request
+def allow_google_sites_framing(response):
+    # Allow Google Sites to embed this app in an iframe.
+    response.headers['Content-Security-Policy'] = (
+        "frame-ancestors 'self' https://sites.google.com https://*.googleusercontent.com"
+    )
+    # Remove any X-Frame-Options header that would block framing.
+    response.headers.discard('X-Frame-Options')
+    return response
 
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
 PLANILHA_EXTENDIDA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1zG0Ax_wKgg6UB9PgVXg29_qoZKDCE1Db/export?format=xlsx"
@@ -146,29 +160,38 @@ def process_ipt_archive():
 
 def download_gsheet(url):
     try:
-        response = requests.get(url, timeout=30) # Add a timeout
+        # Increased timeout to 300s for large files (e.g. 60MB planilha)
+        response = requests.get(url, timeout=300) 
         response.raise_for_status()
         return response.content
     except requests.exceptions.RequestException as e:
-        print(f"FATAL: Could not download Google Sheet from {url}. Error: {e}")
+        print(f"ERROR: Could not download Google Sheet from {url}. Error: {e}")
         return None
 
 LOCAL_PESQUISADORES = os.path.join(os.path.dirname(__file__), 'data', 'pesquisadores.xlsx')
-LOCAL_PLANILHA      = os.path.join(os.path.dirname(__file__), 'data', 'planilha_extendida.xlsx')
+LOCAL_PLANILHA      = os.path.join(os.path.dirname(__file__), 'data', 'planilha_extendida.csv')
 LOCAL_IPT_COMBINED  = os.path.join(os.path.dirname(__file__), 'data', 'ipt_combined.csv')
+LOCAL_INVASIVE      = os.path.join(os.path.dirname(__file__), 'data', 'invasive_list.tsv')
+
+INVASIVE_DF = None
 
 def load_data_on_startup():
-    global TAXON_HIERARCHY, PESQUISADORES_DF, PLANILHA_DF, IPT_DF, DATA_LOADED_SUCCESSFULLY
+    global TAXON_HIERARCHY, PESQUISADORES_DF, PLANILHA_DF, IPT_DF, INVASIVE_DF, DATA_LOADED_SUCCESSFULLY
 
+    print("--- Starting Data Load ---")
     # --- pesquisadores ---
     try:
         content = download_gsheet(PESQUISADORES_SHEET_URL)
         if content:
             PESQUISADORES_DF = pd.read_excel(BytesIO(content), header=0)
+            # Cache locally
+            with open(LOCAL_PESQUISADORES, 'wb') as f:
+                f.write(content)
             print("Loaded pesquisadores from Google Sheet.")
         elif os.path.exists(LOCAL_PESQUISADORES):
             PESQUISADORES_DF = pd.read_excel(LOCAL_PESQUISADORES, header=0)
             print("Loaded pesquisadores from local file (Google Sheet unavailable).")
+        
         if PESQUISADORES_DF is not None:
             PESQUISADORES_DF.columns = [c.lower().strip() for c in PESQUISADORES_DF.columns]
             print(f"  {len(PESQUISADORES_DF)} researchers loaded.")
@@ -179,16 +202,37 @@ def load_data_on_startup():
     try:
         content = download_gsheet(PLANILHA_EXTENDIDA_SHEET_URL)
         if content:
-            PLANILHA_DF = pd.read_excel(BytesIO(content))
+            PLANILHA_DF = pd.read_csv(BytesIO(content))
+            # Cache locally
+            with open(LOCAL_PLANILHA, 'wb') as f:
+                f.write(content)
             print("Loaded planilha from Google Sheet.")
         elif os.path.exists(LOCAL_PLANILHA):
-            PLANILHA_DF = pd.read_excel(LOCAL_PLANILHA)
+            PLANILHA_DF = pd.read_csv(LOCAL_PLANILHA, low_memory=False)
             print("Loaded planilha from local file (Google Sheet unavailable).")
+            
         if PLANILHA_DF is not None:
             PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
             print(f"  {len(PLANILHA_DF)} records loaded.")
     except Exception as e:
         print(f"ERROR loading planilha: {e}")
+
+    # --- invasive list ---
+    try:
+        content = download_gsheet(INVASIVE_LIST_URL)
+        if content:
+            INVASIVE_DF = pd.read_csv(BytesIO(content), sep='\t')
+            with open(LOCAL_INVASIVE, 'wb') as f:
+                f.write(content)
+            print("Loaded invasive list from Google Drive.")
+        elif os.path.exists(LOCAL_INVASIVE):
+            INVASIVE_DF = pd.read_csv(LOCAL_INVASIVE, sep='\t')
+            print("Loaded invasive list from local file.")
+        
+        if INVASIVE_DF is not None:
+            print(f"  {len(INVASIVE_DF)} invasive species loaded.")
+    except Exception as e:
+        print(f"ERROR loading invasive list: {e}")
 
     # --- IPT combined (optional) ---
     try:
@@ -1443,10 +1487,6 @@ def analyze_taxon():
         flash("Taxon cannot be empty.", 'warning')
         return redirect(url_for('index'))
 
-    if not user.is_admin and not is_taxon_authorized(taxon_input, session.get('allowed_taxa', [])):
-        flash(f"Taxon '{taxon_input}' is not allowed for analysis.", 'danger')
-        return redirect(url_for('index'))
-
     result_zip_path, summary = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
 
     if result_zip_path and summary:
@@ -1521,7 +1561,7 @@ def upload_data():
     errors   = []
 
     for field, filename in [('pesquisadores',     'pesquisadores.xlsx'),
-                             ('planilha_extendida','planilha_extendida.xlsx')]:
+                             ('planilha_extendida','planilha_extendida.csv')]:
         f = request.files.get(field)
         if f and f.filename:
             dest = os.path.join(app.root_path, 'data', filename)
