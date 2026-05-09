@@ -48,7 +48,7 @@ def allow_google_sites_framing(response):
     return response
 
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
-PLANILHA_EXTENDIDA_SHEET_URL = "https://docs.google.com/spreadsheets/d/1zG0Ax_wKgg6UB9PgVXg29_qoZKDCE1Db/export?format=xlsx"
+PLANILHA_EXTENDIDA_SHEET_URL = "https://drive.google.com/uc?export=download&id=10mvn7MjatBzXqfG5Uyg9wbK1lnYGBbtW"
 INVASIVE_LIST_URL = "https://drive.google.com/uc?export=download&id=1_KHngk2dHKir5Phsndpp_eN_bydBYM3s"
 IPT_SOURCE_URL = "https://ipt.jbrj.gov.br/jbrj/archive.do?r=catalogo_taxonomico_da_fauna_do_brasil&v=1.50"
 IPT_COMBINED_SHEET_URL = os.environ.get('IPT_COMBINED_SHEET_URL', '')
@@ -160,12 +160,23 @@ def process_ipt_archive():
 
 def download_gsheet(url):
     try:
-        # Increased timeout to 300s for large files (e.g. 60MB planilha)
-        response = requests.get(url, timeout=300) 
+        session = requests.Session()
+        response = session.get(url, timeout=300)
         response.raise_for_status()
+        # Handle Google Drive large-file virus-scan confirmation page
+        if 'drive.google.com' in url and b'<html' in response.content[:100].lower():
+            import re
+            match = re.search(rb'name="uuid" value="([^"]+)"', response.content)
+            if match:
+                uuid = match.group(1).decode()
+                file_id = re.search(r'[?&]id=([^&]+)', url)
+                if file_id:
+                    confirm_url = f"https://drive.google.com/uc?export=download&id={file_id.group(1)}&uuid={uuid}&confirm=t"
+                    response = session.get(confirm_url, timeout=300)
+                    response.raise_for_status()
         return response.content
     except requests.exceptions.RequestException as e:
-        print(f"ERROR: Could not download Google Sheet from {url}. Error: {e}")
+        print(f"ERROR: Could not download from {url}. Error: {e}")
         return None
 
 LOCAL_PESQUISADORES = os.path.join(os.path.dirname(__file__), 'data', 'pesquisadores.xlsx')
