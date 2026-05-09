@@ -817,7 +817,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 return True
             return RANK_HIERARCHY.index(level) > taxon_rank_idx
 
-        rank_mask   = filtered_data['taxonrank'].isin(['ESPECIE', 'SUBESPECIE'])
+        _taxonrank_norm = filtered_data['taxonrank'].str.upper().str.strip()
+        rank_mask   = _taxonrank_norm.isin(['ESPECIE', 'SUBESPECIE'])
         status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
@@ -832,12 +833,13 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                 accepted['genus'].fillna('').str.strip() + ' ' +
                 accepted['specificepithet'].fillna('').str.strip()
             ).str.lower()
+            _accepted_rank = accepted['taxonrank'].str.upper().str.strip()
             subsp_binomials = set(
-                accepted.loc[accepted['taxonrank'] == 'SUBESPECIE', '_binomial']
+                accepted.loc[_accepted_rank == 'SUBESPECIE', '_binomial']
             )
             # Keep row if it is a subspecies OR if its binomial has no subspecies
             species_data = accepted[
-                (accepted['taxonrank'] == 'SUBESPECIE') |
+                (_accepted_rank == 'SUBESPECIE') |
                 (~accepted['_binomial'].isin(subsp_binomials))
             ].copy()
             species_data.drop(columns=['_binomial'], inplace=True)
@@ -1340,8 +1342,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         summary = {
             'taxon':        taxon_filter,
             'n_spp_ctfb':   int(len(species_data)),
-            'n_species':    int((species_data['taxonrank'] == 'ESPECIE').sum()),
-            'n_subsp':      int((species_data['taxonrank'] == 'SUBESPECIE').sum()),
+            'n_species':    int((species_data['taxonrank'].str.upper().str.strip() == 'ESPECIE').sum()),
+            'n_subsp':      int((species_data['taxonrank'].str.upper().str.strip() == 'SUBESPECIE').sum()),
             'mean_complete': round(float(species_data['completeness'].mean()), 1),
             'n_families':   int(species_data['family'].nunique())   if 'family'  in species_data.columns else 0,
             'n_orders':     int(species_data['order'].nunique())    if 'order'   in species_data.columns else 0,
