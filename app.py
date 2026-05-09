@@ -48,7 +48,7 @@ def allow_google_sites_framing(response):
     return response
 
 PESQUISADORES_SHEET_URL = "https://docs.google.com/spreadsheets/d/1adWD1sksMqWhAaLmKC61mV8a3ZeuT-ou/export?format=xlsx"
-PLANILHA_EXTENDIDA_SHEET_URL = "https://drive.google.com/uc?export=download&id=10mvn7MjatBzXqfG5Uyg9wbK1lnYGBbtW"
+PLANILHA_EXTENDIDA_SHEET_URL = "https://drive.usercontent.google.com/download?id=10mvn7MjatBzXqfG5Uyg9wbK1lnYGBbtW&export=download&confirm=t"
 INVASIVE_LIST_URL = "https://drive.google.com/uc?export=download&id=1_KHngk2dHKir5Phsndpp_eN_bydBYM3s"
 IPT_SOURCE_URL = "https://ipt.jbrj.gov.br/jbrj/archive.do?r=catalogo_taxonomico_da_fauna_do_brasil&v=1.50"
 IPT_COMBINED_SHEET_URL = os.environ.get('IPT_COMBINED_SHEET_URL', '')
@@ -158,22 +158,26 @@ def process_ipt_archive():
         IPT_UPDATE_JOB['message'] = f'Erro: {str(e)}'
         print(f"IPT Processing Error: {e}")
 
+def _gdrive_direct_url(url):
+    """Convert any Google Drive share/uc URL to usercontent direct download URL."""
+    import re
+    m = re.search(r'[?&/](?:id=|d/)([A-Za-z0-9_-]{10,})', url)
+    if m:
+        return f"https://drive.usercontent.google.com/download?id={m.group(1)}&export=download&confirm=t"
+    return url
+
 def download_gsheet(url):
     try:
+        dl_url = _gdrive_direct_url(url) if 'drive.google.com' in url else url
         session = requests.Session()
-        response = session.get(url, timeout=300)
+        response = session.get(dl_url, timeout=300)
         response.raise_for_status()
-        # Handle Google Drive large-file virus-scan confirmation page
-        if 'drive.google.com' in url and b'<html' in response.content[:100].lower():
-            import re
-            match = re.search(rb'name="uuid" value="([^"]+)"', response.content)
-            if match:
-                uuid = match.group(1).decode()
-                file_id = re.search(r'[?&]id=([^&]+)', url)
-                if file_id:
-                    confirm_url = f"https://drive.google.com/uc?export=download&id={file_id.group(1)}&uuid={uuid}&confirm=t"
-                    response = session.get(confirm_url, timeout=300)
-                    response.raise_for_status()
+        # Detect HTML response — means file not public or URL wrong
+        if response.content[:100].lower().lstrip().startswith(b'<!doctype') or \
+           response.content[:100].lower().lstrip().startswith(b'<html'):
+            print(f"ERROR: Google Drive returned HTML for {dl_url}. "
+                  f"File may not be publicly shared or URL is invalid.")
+            return None
         return response.content
     except requests.exceptions.RequestException as e:
         print(f"ERROR: Could not download from {url}. Error: {e}")
