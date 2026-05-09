@@ -784,6 +784,9 @@ def generate_completeness_chart(dataframe, category_column, title_label, sort_co
     plt.close(fig)
 
 def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
+    import sys as _sys
+    def _dbg(msg):
+        print(msg, file=_sys.stderr, flush=True)
     try:
         # Full taxonomic rank hierarchy (coarser → finer)
         RANK_HIERARCHY = [
@@ -793,15 +796,16 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             'genus', 'subgenus',
         ]
 
+        _dbg(f"[analysis] '{taxon_filter}' start. planilha cols={list(planilha_df.columns[:10])}")
         # --- Filter rows matching the requested taxon across all rank columns ---
         mask = pd.Series(False, index=planilha_df.index)
         for rank in RANK_HIERARCHY:
             if rank in planilha_df.columns:
                 mask |= (planilha_df[rank].str.lower() == taxon_filter.lower())
         filtered_data = planilha_df[mask].copy()
-        print(f"[analysis] '{taxon_filter}': {len(filtered_data)} rows matched rank filter")
+        _dbg(f"[analysis] '{taxon_filter}': {len(filtered_data)} rows matched rank filter")
         if filtered_data.empty:
-            print(f"[analysis] '{taxon_filter}': no rows found in any rank column — returning None")
+            _dbg(f"[analysis] '{taxon_filter}': no rows found in any rank column — returning None")
             return None, None
 
         # Determine which rank the input taxon belongs to
@@ -812,7 +816,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                     taxon_rank_col = col
                     break
         taxon_rank_idx = RANK_HIERARCHY.index(taxon_rank_col) if taxon_rank_col else -1
-        print(f"[analysis] '{taxon_filter}': rank_col={taxon_rank_col}")
+        _dbg(f"[analysis] '{taxon_filter}': rank_col={taxon_rank_col}")
 
         def is_below_input_rank(level):
             """True only if level is strictly finer than the input taxon's rank."""
@@ -825,11 +829,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
-        print(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={( rank_mask & status_mask).sum()}")
-        print(f"[analysis] '{taxon_filter}': taxonrank values: {_taxonrank_norm.value_counts().to_dict()}")
+        _dbg(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={(rank_mask & status_mask).sum()}")
+        _dbg(f"[analysis] '{taxon_filter}': taxonrank values: {_taxonrank_norm.value_counts().to_dict()}")
         accepted = filtered_data[rank_mask & status_mask].copy()
         if accepted.empty:
-            print(f"[analysis] '{taxon_filter}': accepted empty — returning None")
+            _dbg(f"[analysis] '{taxon_filter}': accepted empty — returning None")
             return None, None
 
         # If a species has accepted subspecies, drop the species-level row and
@@ -1357,9 +1361,9 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         }
         return zip_filepath, summary
     except Exception as e:
-        print(f"An error occurred during Python analysis: {e}")
-        import traceback
-        traceback.print_exc()
+        import sys as _sys, traceback as _tb
+        print(f"An error occurred during Python analysis: {e}", file=_sys.stderr, flush=True)
+        _tb.print_exc(file=_sys.stderr)
         return None, None
 
 # --- Language helpers ---
