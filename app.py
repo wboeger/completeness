@@ -234,6 +234,17 @@ def load_data_on_startup():
             
         if PLANILHA_DF is not None:
             PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
+            # Normalize Darwin Core English values → internal Portuguese codes
+            if 'taxonrank' in PLANILHA_DF.columns:
+                PLANILHA_DF['taxonrank'] = PLANILHA_DF['taxonrank'].str.upper().str.strip().replace({
+                    'SPECIES': 'ESPECIE', 'SUBSPECIES': 'SUBESPECIE',
+                    'VARIETY': 'VARIEDADE', 'FORM': 'FORMA',
+                })
+            if 'taxonomicstatus' in PLANILHA_DF.columns:
+                PLANILHA_DF['taxonomicstatus'] = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().replace({
+                    'ACCEPTED': 'NOME_ACEITO', 'SYNONYM': 'SINONIMO',
+                    'HOMOTYPICSYNONYM': 'SINONIMO', 'HETEROTYPICSYNONYM': 'SINONIMO',
+                })
             print(f"  {len(PLANILHA_DF)} records loaded.")
     except Exception as e:
         print(f"ERROR loading planilha: {e}")
