@@ -799,7 +799,9 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             if rank in planilha_df.columns:
                 mask |= (planilha_df[rank].str.lower() == taxon_filter.lower())
         filtered_data = planilha_df[mask].copy()
+        print(f"[analysis] '{taxon_filter}': {len(filtered_data)} rows matched rank filter")
         if filtered_data.empty:
+            print(f"[analysis] '{taxon_filter}': no rows found in any rank column — returning None")
             return None, None
 
         # Determine which rank the input taxon belongs to
@@ -810,6 +812,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
                     taxon_rank_col = col
                     break
         taxon_rank_idx = RANK_HIERARCHY.index(taxon_rank_col) if taxon_rank_col else -1
+        print(f"[analysis] '{taxon_filter}': rank_col={taxon_rank_col}")
 
         def is_below_input_rank(level):
             """True only if level is strictly finer than the input taxon's rank."""
@@ -822,8 +825,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
+        print(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={( rank_mask & status_mask).sum()}")
+        print(f"[analysis] '{taxon_filter}': taxonrank values: {_taxonrank_norm.value_counts().to_dict()}")
         accepted = filtered_data[rank_mask & status_mask].copy()
         if accepted.empty:
+            print(f"[analysis] '{taxon_filter}': accepted empty — returning None")
             return None, None
 
         # If a species has accepted subspecies, drop the species-level row and
