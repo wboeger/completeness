@@ -200,6 +200,7 @@ def load_data_on_startup():
         if content:
             PESQUISADORES_DF = pd.read_excel(BytesIO(content), header=0)
             # Cache locally
+            os.makedirs(os.path.dirname(LOCAL_PESQUISADORES), exist_ok=True)
             with open(LOCAL_PESQUISADORES, 'wb') as f:
                 f.write(content)
             print("Loaded pesquisadores from Google Sheet.")
@@ -223,6 +224,7 @@ def load_data_on_startup():
         if content:
             PLANILHA_DF = pd.read_csv(BytesIO(content))
             # Cache locally
+            os.makedirs(os.path.dirname(LOCAL_PLANILHA), exist_ok=True)
             with open(LOCAL_PLANILHA, 'wb') as f:
                 f.write(content)
             print("Loaded planilha from Google Sheet.")
@@ -241,6 +243,7 @@ def load_data_on_startup():
         content = download_gsheet(INVASIVE_LIST_URL)
         if content:
             INVASIVE_DF = pd.read_csv(BytesIO(content), sep='\t')
+            os.makedirs(os.path.dirname(LOCAL_INVASIVE), exist_ok=True)
             with open(LOCAL_INVASIVE, 'wb') as f:
                 f.write(content)
             print("Loaded invasive list from Google Drive.")
