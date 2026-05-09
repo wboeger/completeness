@@ -269,6 +269,12 @@ def load_data_on_startup():
                     'ACCEPTED': 'NOME_ACEITO', 'SYNONYM': 'SINONIMO',
                     'HOMOTYPICSYNONYM': 'SINONIMO', 'HETEROTYPICSYNONYM': 'SINONIMO',
                 })
+            if 'establishmentmeans' in PLANILHA_DF.columns:
+                PLANILHA_DF['establishmentmeans'] = PLANILHA_DF['establishmentmeans'].str.upper().str.strip().replace({
+                    'NATIVE':       'NATIVA',
+                    'EXOTIC':       'EXOTICA',
+                    'CRYPTOGENIC':  'CRIPTOGENICA',
+                })
             print(f"  {len(PLANILHA_DF)} records loaded.")
     except Exception as e:
         print(f"ERROR loading planilha: {e}")
