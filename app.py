@@ -796,7 +796,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             'genus', 'subgenus',
         ]
 
-        _dbg(f"[analysis] '{taxon_filter}' start. planilha cols={list(planilha_df.columns[:10])}")
+        _rank_cols = [r for r in RANK_HIERARCHY if r in planilha_df.columns]
+        _dbg(f"[analysis] '{taxon_filter}' start. planilha cols={list(planilha_df.columns[:10])} rank_cols_found={_rank_cols}")
         # --- Filter rows matching the requested taxon across all rank columns ---
         mask = pd.Series(False, index=planilha_df.index)
         for rank in RANK_HIERARCHY:
@@ -805,8 +806,9 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         filtered_data = planilha_df[mask].copy()
         _dbg(f"[analysis] '{taxon_filter}': {len(filtered_data)} rows matched rank filter")
         if filtered_data.empty:
-            _dbg(f"[analysis] '{taxon_filter}': no rows found in any rank column — returning None")
-            return None, None
+            diag = f"no rows matched '{taxon_filter}' in rank cols {_rank_cols}"
+            _dbg(f"[analysis] {diag}")
+            return None, None, diag
 
         # Determine which rank the input taxon belongs to
         taxon_rank_col = None
@@ -829,12 +831,13 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         status_mask = filtered_data['taxonomicstatus'].str.upper().str.strip() == 'NOME_ACEITO' \
                       if 'taxonomicstatus' in filtered_data.columns \
                       else pd.Series(True, index=filtered_data.index)
-        _dbg(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={(rank_mask & status_mask).sum()}")
-        _dbg(f"[analysis] '{taxon_filter}': taxonrank values: {_taxonrank_norm.value_counts().to_dict()}")
+        _rank_vals = _taxonrank_norm.value_counts().to_dict()
+        _dbg(f"[analysis] '{taxon_filter}': rank_mask={rank_mask.sum()} status_mask={status_mask.sum()} combined={(rank_mask & status_mask).sum()} taxonrank_vals={_rank_vals}")
         accepted = filtered_data[rank_mask & status_mask].copy()
         if accepted.empty:
-            _dbg(f"[analysis] '{taxon_filter}': accepted empty — returning None")
-            return None, None
+            diag = f"found {len(filtered_data)} rows but 0 accepted species/subspecies. taxonrank_vals={_rank_vals}"
+            _dbg(f"[analysis] '{taxon_filter}': {diag}")
+            return None, None, diag
 
         # If a species has accepted subspecies, drop the species-level row and
         # use only its subspecies as the units of analysis.
@@ -857,7 +860,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             species_data = accepted.copy()
 
         if species_data.empty:
-            return None, None
+            return None, None, "species_data empty after subspecies dedup"
 
         # Deduplicate by canonical epithet key:
         # 1. Rows with the same epithet key AND the same namepublishedinyear are merged
@@ -1359,12 +1362,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             'n_orders':     int(species_data['order'].nunique())    if 'order'   in species_data.columns else 0,
             'n_classes':    int(species_data['class'].nunique())    if 'class'   in species_data.columns else 0,
         }
-        return zip_filepath, summary
+        return zip_filepath, summary, None
     except Exception as e:
         import sys as _sys, traceback as _tb
-        print(f"An error occurred during Python analysis: {e}", file=_sys.stderr, flush=True)
         _tb.print_exc(file=_sys.stderr)
-        return None, None
+        return None, None, f"exception: {e}"
 
 # --- Language helpers ---
 def tmpl(name):
@@ -1524,14 +1526,14 @@ def analyze_taxon():
         flash("Taxon cannot be empty.", 'warning')
         return redirect(url_for('index'))
 
-    result_zip_path, summary = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
+    result_zip_path, summary, diag = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
 
     if result_zip_path and summary:
         result_id = uuid.uuid4().hex
         ANALYSIS_RESULTS[result_id] = {'zip_path': result_zip_path, 'summary': summary}
         return redirect(url_for('analysis_result', result_id=result_id))
     else:
-        flash(f"Analysis failed for '{taxon_input}'. Check server logs for details.", 'danger')
+        flash(f"Analysis failed for '{taxon_input}': {diag}", 'danger')
         return redirect(url_for('index'))
 
 @app.route('/result/<result_id>')
