@@ -239,8 +239,28 @@ def load_data_on_startup():
                 _raw_ranks = PLANILHA_DF['taxonrank'].str.upper().str.strip().value_counts().to_dict()
                 print(f"  taxonrank raw values: {_raw_ranks}")
                 PLANILHA_DF['taxonrank'] = PLANILHA_DF['taxonrank'].str.upper().str.strip().replace({
-                    'SPECIES': 'ESPECIE', 'SUBSPECIES': 'SUBESPECIE',
-                    'VARIETY': 'VARIEDADE', 'FORM': 'FORMA',
+                    'KINGDOM':      'REINO',
+                    'PHYLUM':       'FILO',
+                    'SUBPHYLUM':    'SUB_FILO',
+                    'SUPERCLASS':   'SUPER_CLASSE',
+                    'CLASS':        'CLASSE',
+                    'SUBCLASS':     'SUB_CLASSE',
+                    'INFRACLASS':   'INFRA_CLASSE',
+                    'SUPERORDER':   'SUPER_ORDEM',
+                    'ORDER':        'ORDEM',
+                    'SUBORDER':     'SUB_ORDEM',
+                    'INFRAORDER':   'INFRA_ORDEM',
+                    'SUPERFAMILY':  'SUPER_FAMILIA',
+                    'FAMILY':       'FAMILIA',
+                    'SUBFAMILY':    'SUB_FAMILIA',
+                    'TRIBE':        'TRIBO',
+                    'SUBTRIBE':     'SUB_TRIBO',
+                    'GENUS':        'GENERO',
+                    'SUBGENUS':     'SUB_GENERO',
+                    'SPECIES':      'ESPECIE',
+                    'SUBSPECIES':   'SUBESPECIE',
+                    'VARIETY':      'VARIEDADE',
+                    'FORM':         'FORMA',
                 })
             if 'taxonomicstatus' in PLANILHA_DF.columns:
                 _raw_statuses = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().value_counts().to_dict()
