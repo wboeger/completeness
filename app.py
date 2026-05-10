@@ -234,42 +234,17 @@ def load_data_on_startup():
             
         if PLANILHA_DF is not None:
             PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
-            # Normalize Darwin Core English values → internal Portuguese codes
+            # Normalize to uppercase; GDrive file uses English DwC values
             if 'taxonrank' in PLANILHA_DF.columns:
                 _raw_ranks = PLANILHA_DF['taxonrank'].str.upper().str.strip().value_counts().to_dict()
                 print(f"  taxonrank raw values: {_raw_ranks}")
-                PLANILHA_DF['taxonrank'] = PLANILHA_DF['taxonrank'].str.upper().str.strip().replace({
-                    'REINO':        'KINGDOM',
-                    'FILO':         'PHYLUM',
-                    'SUB_FILO':     'SUBPHYLUM',
-                    'SUPER_CLASSE': 'SUPERCLASS',
-                    'CLASSE':       'CLASS',
-                    'SUB_CLASSE':   'SUBCLASS',
-                    'INFRA_CLASSE': 'INFRACLASS',
-                    'SUPER_ORDEM':  'SUPERORDER',
-                    'ORDEM':        'ORDER',
-                    'SUB_ORDEM':    'SUBORDER',
-                    'INFRA_ORDEM':  'INFRAORDER',
-                    'SUPER_FAMILIA':'SUPERFAMILY',
-                    'FAMILIA':      'FAMILY',
-                    'SUB_FAMILIA':  'SUBFAMILY',
-                    'TRIBO':        'TRIBE',
-                    'SUB_TRIBO':    'SUBTRIBE',
-                    'GENERO':       'GENUS',
-                    'SUB_GENERO':   'SUBGENUS',
-                    'SPECIES':      'SPECIES',
-                    'SUBSPECIES':   'SUBSPECIES',
-                    'VARIEDADE':    'VARIETY',
-                    'FORMA':        'FORM',
-                })
+                PLANILHA_DF['taxonrank'] = PLANILHA_DF['taxonrank'].str.upper().str.strip()
             if 'taxonomicstatus' in PLANILHA_DF.columns:
                 _raw_statuses = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().value_counts().to_dict()
                 print(f"  taxonomicstatus raw values: {_raw_statuses}")
                 PLANILHA_DF['taxonomicstatus'] = PLANILHA_DF['taxonomicstatus'].str.upper().str.strip().replace({
-                    'ACCEPTED':         'ACCEPTED',
-                    'SYNONYM':            'SYNONYM',
-                    'HOMOTYPICSYNONYM':    'SYNONYM',
-                    'HETEROTYPICSYNONYM':  'SYNONYM',
+                    'HOMOTYPICSYNONYM':   'SYNONYM',
+                    'HETEROTYPICSYNONYM': 'SYNONYM',
                 })
             if 'establishmentmeans' in PLANILHA_DF.columns:
                 PLANILHA_DF['establishmentmeans'] = PLANILHA_DF['establishmentmeans'].str.upper().str.strip().replace({
