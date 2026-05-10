@@ -889,7 +889,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
         # Key = genus + subgenus + specificepithet + infraspecificepithet (non-empty parts).
         _epi_cols = [c for c in ['genus', 'subgenus', 'specificepithet', 'infraspecificepithet']
                      if c in species_data.columns]
-        if _epi_cols and 'namepublishedinyear' in species_data.columns:
+        if 'specificepithet' in _epi_cols and 'namepublishedinyear' in species_data.columns:
             species_data['_epi_key'] = species_data[_epi_cols].fillna('').apply(
                 lambda r: ' '.join(p for p in r if str(p).strip()), axis=1
             ).str.lower().str.strip()
