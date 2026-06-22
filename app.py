@@ -1683,6 +1683,19 @@ def index():
                            allowed_taxa_list=session.get('allowed_taxa', []),
                            data_dates=load_data_dates())
 
+@app.route('/manual')
+def manual():
+    """Serve the user manual PDF matching the current session language."""
+    fname = 'manual_en.pdf' if session.get('lang') == 'en' else 'manual_pt.pdf'
+    path = os.path.join(os.path.dirname(__file__), fname)
+    if not os.path.exists(path):
+        # Fall back to the other language if one PDF is missing.
+        alt = 'manual_pt.pdf' if fname == 'manual_en.pdf' else 'manual_en.pdf'
+        path = os.path.join(os.path.dirname(__file__), alt)
+        if not os.path.exists(path):
+            return ('Manual not available.', 404)
+    return send_file(path, mimetype='application/pdf')
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':

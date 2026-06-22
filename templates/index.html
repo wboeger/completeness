@@ -168,6 +168,7 @@
         {% if is_admin %}
             <a href="{{ url_for('admin_dashboard') }}">Admin</a>
         {% endif %}
+        <a href="{{ url_for('manual') }}" target="_blank" rel="noopener">Manual</a>
         <a href="{{ url_for('logout') }}">Sair</a>
     </div>
     {% if data_dates.planilha_extendida or data_dates.pesquisadores %}
