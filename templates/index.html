@@ -69,6 +69,7 @@
 
         .gbif-note { font-size: .78rem; color: #95a5a6; margin-top: .5rem; display: none; line-height: 1.4; }
         .gbif-note.visible { display: block; }
+        .db-dates { font-size: .78rem; color: #95a5a6; margin-top: .8rem; }
     </style>
 </head>
 <body>
@@ -169,6 +170,18 @@
         {% endif %}
         <a href="{{ url_for('logout') }}">Sair</a>
     </div>
+    {% if data_dates.planilha_extendida or data_dates.pesquisadores %}
+    <p class="db-dates">
+        {% if data_dates.planilha_extendida %}
+        Catálogo: <strong>{{ data_dates.planilha_extendida }}</strong>
+        {% endif %}
+        {% if data_dates.planilha_extendida and data_dates.pesquisadores %} &nbsp;·&nbsp; {% endif %}
+        {% if data_dates.pesquisadores %}
+        Pesquisadores: <strong>{{ data_dates.pesquisadores }}</strong>
+        {% endif %}
+        {% if data_dates.nota %} &nbsp;·&nbsp; {{ data_dates.nota }}{% endif %}
+    </p>
+    {% endif %}
 </div>
 
 <script>

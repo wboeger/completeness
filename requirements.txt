@@ -7,3 +7,5 @@ Werkzeug==3.1.8 # Explicitly add Werkzeug for security utilities
 requests==2.31.0
 psycopg2-binary==2.9.9
 matplotlib==3.8.4
+APScheduler==3.10.4
+tzdata==2024.1

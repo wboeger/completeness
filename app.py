@@ -183,6 +183,63 @@ def download_gsheet(url):
         print(f"ERROR: Could not download from {url}. Error: {e}")
         return None
 
+# --- JBRJ Fauna do Brasil PostgREST API ---
+FAUNA_API_URL = os.environ.get(
+    'FAUNA_API_URL',
+    'https://fauna.jbrj.gov.br/rest/mv_planilha_extendida'
+)
+FAUNA_PAGE_SIZE = int(os.environ.get('FAUNA_PAGE_SIZE', '5000'))
+
+def download_fauna_csv(dest_path):
+    """Download the full Catalogo Taxonomico da Fauna do Brasil dataset from the
+    JBRJ PostgREST API and write it to dest_path as 'planilha_extendida.csv'.
+
+    Paginates with limit/offset, streams each page straight to a temporary file
+    and atomically replaces dest_path on success, so an existing cached file is
+    preserved if the download fails midway. Returns True on success.
+    """
+    import csv as _csv
+    tmp_path = dest_path + '.tmp'
+    offset = 0
+    total = 0
+    writer = None
+    try:
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        sess = requests.Session()
+        with open(tmp_path, 'w', encoding='utf-8', newline='') as fh:
+            while True:
+                url = f'{FAUNA_API_URL}?limit={FAUNA_PAGE_SIZE}&offset={offset}'
+                resp = sess.get(url, timeout=300,
+                                headers={'Accept': 'application/json'})
+                resp.raise_for_status()
+                rows = resp.json()
+                if not rows:
+                    break
+                if writer is None:
+                    writer = _csv.DictWriter(fh, fieldnames=list(rows[0].keys()),
+                                             extrasaction='ignore')
+                    writer.writeheader()
+                writer.writerows(rows)
+                total += len(rows)
+                if len(rows) < FAUNA_PAGE_SIZE:
+                    break
+                offset += FAUNA_PAGE_SIZE
+        if total == 0:
+            os.remove(tmp_path)
+            print("ERROR: Fauna API returned no rows.")
+            return False
+        os.replace(tmp_path, dest_path)
+        print(f"Downloaded {total} rows from Fauna API -> {dest_path}")
+        return True
+    except Exception as e:
+        print(f"ERROR downloading from Fauna API: {e}")
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        return False
+
 LOCAL_PESQUISADORES = os.path.join(os.path.dirname(__file__), 'data', 'pesquisadores.xlsx')
 LOCAL_PLANILHA      = os.path.join(os.path.dirname(__file__), 'data', 'planilha_extendida.csv')
 LOCAL_IPT_COMBINED  = os.path.join(os.path.dirname(__file__), 'data', 'ipt_combined.csv')
@@ -218,19 +275,22 @@ def load_data_on_startup():
     except Exception as e:
         print(f"ERROR loading pesquisadores: {e}")
 
-    # --- planilha extendida ---
+    # --- planilha extendida (from JBRJ Fauna API) ---
     try:
-        content = download_gsheet(PLANILHA_EXTENDIDA_SHEET_URL)
-        if content:
-            PLANILHA_DF = pd.read_csv(BytesIO(content))
-            # Cache locally
-            os.makedirs(os.path.dirname(LOCAL_PLANILHA), exist_ok=True)
-            with open(LOCAL_PLANILHA, 'wb') as f:
-                f.write(content)
-            print("Loaded planilha from Google Sheet.")
+        ok = download_fauna_csv(LOCAL_PLANILHA)
+        if ok and os.path.exists(LOCAL_PLANILHA):
+            PLANILHA_DF = pd.read_csv(LOCAL_PLANILHA, low_memory=False)
+            print("Loaded planilha from Fauna API.")
+            # Record refresh date for the UI.
+            try:
+                _d = load_data_dates()
+                _d['planilha_extendida'] = datetime.date.today().isoformat()
+                save_data_dates(_d)
+            except Exception as _e:
+                print(f"  (could not update planilha date: {_e})")
         elif os.path.exists(LOCAL_PLANILHA):
             PLANILHA_DF = pd.read_csv(LOCAL_PLANILHA, low_memory=False)
-            print("Loaded planilha from local file (Google Sheet unavailable).")
+            print("Loaded planilha from local cache (Fauna API unavailable).")
             
         if PLANILHA_DF is not None:
             PLANILHA_DF.columns = [col.lower().strip() for col in PLANILHA_DF.columns]
@@ -1338,8 +1398,8 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             generated_files.append(path)
 
         if not missing_fields_df.empty:
-            miss_path = os.path.join(temp_dir, "campos_faltantes_por_especie.csv")
-            missing_fields_df.to_csv(miss_path, index=False, encoding='utf-8-sig')
+            miss_path = os.path.join(temp_dir, "campos_faltantes_por_especie.xlsx")
+            missing_fields_df.to_excel(miss_path, index=False)
             generated_files.append(miss_path)
 
         for fname, df, col, label, sort_cols in [
@@ -1407,6 +1467,33 @@ def save_data_dates(dates: dict):
     with open(DATA_DATES_FILE, 'w', encoding='utf-8') as f:
         json.dump(dates, f, ensure_ascii=False, indent=2)
 
+# --- Daily data refresh scheduler ---
+def refresh_all_data():
+    """Re-download datasets (planilha from the Fauna API) and reload into memory.
+    Invoked by the scheduler daily at 03:00 America/Sao_Paulo."""
+    print("[SCHED] Daily data refresh starting...")
+    try:
+        with app.app_context():
+            load_data_on_startup()
+        print("[SCHED] Daily data refresh complete.")
+    except Exception as e:
+        print(f"[SCHED] Daily refresh FAILED: {e}")
+
+def start_scheduler():
+    if os.environ.get('ENABLE_SCHEDULER', '1') not in ('1', 'true', 'True'):
+        print("[SCHED] Scheduler disabled via ENABLE_SCHEDULER.")
+        return
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from zoneinfo import ZoneInfo
+        sched = BackgroundScheduler(timezone=ZoneInfo('America/Sao_Paulo'))
+        sched.add_job(refresh_all_data, 'cron', hour=3, minute=0,
+                      id='daily_data_refresh', replace_existing=True)
+        sched.start()
+        print("[SCHED] Scheduler started — daily refresh at 03:00 America/Sao_Paulo.")
+    except Exception as e:
+        print(f"[SCHED] Could not start scheduler: {e}")
+
 # --- Flask Routes ---
 _USING_POSTGRES = 'postgresql' in DATABASE_URL
 ANALYSIS_RESULTS = {}   # result_id → {zip_path, summary}
@@ -1452,6 +1539,9 @@ with app.app_context():
             db.session.commit()
             print(f"[DB] Seeded {_seeded} user(s) from users_backup.csv.")
 
+# Start the daily 03:00 America/Sao_Paulo data refresh (single gunicorn worker).
+start_scheduler()
+
 @app.route('/lang/<code>')
 def set_lang(code):
     if code in ('pt', 'en'):
@@ -1467,7 +1557,8 @@ def index():
                            username=user.username,
                            is_admin=user.is_admin,
                            data_loaded=DATA_LOADED_SUCCESSFULLY,
-                           allowed_taxa_list=session.get('allowed_taxa', []))
+                           allowed_taxa_list=session.get('allowed_taxa', []),
+                           data_dates=load_data_dates())
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -1488,7 +1579,7 @@ def login():
             return redirect(url_for('index'))
         else:
             flash('Credenciais inválidas.', 'danger')
-    return render_template(tmpl('login'))
+    return render_template(tmpl('login'), data_dates=load_data_dates())
 
 @app.route('/set_password', methods=['GET', 'POST'])
 def set_password():

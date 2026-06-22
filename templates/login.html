@@ -32,6 +32,7 @@
                   font-size: .83rem; color: #7f8c8d; text-align: center; line-height: 1.5; }
         .forgot a { color: #2980b9; text-decoration: none; }
         .forgot a:hover { text-decoration: underline; }
+        .db-dates { font-size: .78rem; color: #95a5a6; margin: -.8rem 0 1rem; }
         .lang-bar { display: flex; gap: .5rem; margin-bottom: 1.4rem; }
         .lang-btn { flex: 1; padding: .5rem; border: 2px solid #dce1e7; border-radius: 6px;
                     background: white; font-size: .9rem; font-weight: 600; cursor: pointer;
@@ -45,6 +46,17 @@
 <div class="card">
     <h2>Porcentômetro</h2>
     <p class="app-name">Catálogo Taxonômico da Fauna do Brasil</p>
+    {% if data_dates.planilha_extendida or data_dates.pesquisadores %}
+    <p class="db-dates">
+        {% if data_dates.planilha_extendida %}
+        Catálogo: <strong>{{ data_dates.planilha_extendida }}</strong>
+        {% endif %}
+        {% if data_dates.planilha_extendida and data_dates.pesquisadores %} &nbsp;·&nbsp; {% endif %}
+        {% if data_dates.pesquisadores %}
+        Pesquisadores: <strong>{{ data_dates.pesquisadores }}</strong>
+        {% endif %}
+    </p>
+    {% endif %}
 
     <div class="lang-bar">
         <a class="lang-btn active" href="{{ url_for('set_lang', code='pt') }}">🇧🇷 Português</a>
