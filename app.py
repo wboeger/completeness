@@ -240,6 +240,114 @@ def download_fauna_csv(dest_path):
                 pass
         return False
 
+# --- JBRJ researcher contribution report (daily pesquisadores refresh) ---
+PESQUISADORES_API_URL = os.environ.get(
+    'PESQUISADORES_API_URL',
+    'https://fauna.jbrj.gov.br/rest/mv_relatorio_contribuicao_usuarios'
+)
+
+def _build_taxons(*fields):
+    """Merge comma-separated taxon strings (filo/classe/familia) into one
+    deduplicated, semicolon-separated string, preserving first-seen order."""
+    seen = []
+    for f in fields:
+        if not isinstance(f, str):
+            continue
+        for t in f.split(','):
+            t = t.strip()
+            if t and t not in seen:
+                seen.append(t)
+    return ';'.join(seen)
+
+def fetch_pesquisadores_api():
+    """Download the researcher list from the JBRJ contribution-report PostgREST
+    endpoint. Returns a DataFrame (login, nome_completo, email, táxons) or None
+    on failure, in which case the caller keeps the existing sheet."""
+    try:
+        sess = requests.Session()
+        rows = []
+        offset, page = 0, 5000
+        while True:
+            url = (f'{PESQUISADORES_API_URL}?limit={page}&offset={offset}'
+                   '&select=login,nome_completo,email,'
+                   'filos_alterados,classes_alteradas,familias_alteradas')
+            resp = sess.get(url, timeout=120, headers={'Accept': 'application/json'})
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            rows.extend(batch)
+            if len(batch) < page:
+                break
+            offset += page
+        if not rows:
+            print("ERROR: pesquisadores API returned no rows.")
+            return None
+        recs = [{
+            'login':         (r.get('login') or '').strip(),
+            'nome_completo': (r.get('nome_completo') or '').strip(),
+            'email':         (r.get('email') or '').strip(),
+            'táxons':        _build_taxons(r.get('filos_alterados'),
+                                           r.get('classes_alteradas'),
+                                           r.get('familias_alteradas')),
+        } for r in rows]
+        df = pd.DataFrame(recs)
+        df = df[df['login'] != ''].reset_index(drop=True)
+        print(f"Fetched {len(df)} researchers from JBRJ contribution API.")
+        return df
+    except Exception as e:
+        print(f"ERROR downloading pesquisadores from API: {e}")
+        return None
+
+def merge_pesquisadores(base_df, api_df):
+    """Merge mode. The API supplies login/nome_completo/táxons/email; the base
+    sheet supplies institution and is the fallback for blank API táxons and for
+    users absent from the API. Returns a DataFrame keyed by login."""
+    if api_df is None or api_df.empty:
+        return base_df
+
+    def _get(row, col):
+        if row is not None and col in row and pd.notna(row.get(col)):
+            return str(row.get(col)).strip()
+        return ''
+
+    base_by_login = {}
+    if base_df is not None and 'login' in base_df.columns:
+        for _, br in base_df.iterrows():
+            lg = str(br.get('login', '')).strip().lower()
+            if lg:
+                base_by_login[lg] = br
+
+    out, used = [], set()
+    for _, ar in api_df.iterrows():
+        lg = ar['login'].strip().lower()
+        used.add(lg)
+        b = base_by_login.get(lg)
+        out.append({
+            'login':         ar['login'],
+            'nome_completo': ar['nome_completo'] or _get(b, 'nome_completo'),
+            'táxons':        ar['táxons'] or _get(b, 'táxons'),
+            'institution':   _get(b, 'institution'),
+            'email':         ar['email'] or _get(b, 'email'),
+        })
+    # users present only in the base sheet — keep them untouched
+    sheet_only = 0
+    for lg, b in base_by_login.items():
+        if lg in used:
+            continue
+        sheet_only += 1
+        out.append({
+            'login':         _get(b, 'login'),
+            'nome_completo': _get(b, 'nome_completo'),
+            'táxons':        _get(b, 'táxons'),
+            'institution':   _get(b, 'institution'),
+            'email':         _get(b, 'email'),
+        })
+    merged = pd.DataFrame(out)
+    print(f"Merged pesquisadores: {len(used)} from API + {sheet_only} sheet-only "
+          f"= {len(merged)} total.")
+    return merged
+
 LOCAL_PESQUISADORES = os.path.join(os.path.dirname(__file__), 'data', 'pesquisadores.xlsx')
 LOCAL_PLANILHA      = os.path.join(os.path.dirname(__file__), 'data', 'planilha_extendida.csv')
 LOCAL_IPT_COMBINED  = os.path.join(os.path.dirname(__file__), 'data', 'ipt_combined.csv')
@@ -251,26 +359,41 @@ def load_data_on_startup():
     global TAXON_HIERARCHY, PESQUISADORES_DF, PLANILHA_DF, IPT_DF, INVASIVE_DF, DATA_LOADED_SUCCESSFULLY
 
     print("--- Starting Data Load ---")
-    # --- pesquisadores ---
+    # --- pesquisadores (base sheet for institution + daily JBRJ API merge) ---
     try:
+        import unicodedata as _ud
+        base_df = None
         content = download_gsheet(PESQUISADORES_SHEET_URL)
         if content:
-            PESQUISADORES_DF = pd.read_excel(BytesIO(content), header=0)
-            # Cache locally
-            os.makedirs(os.path.dirname(LOCAL_PESQUISADORES), exist_ok=True)
-            with open(LOCAL_PESQUISADORES, 'wb') as f:
-                f.write(content)
-            print("Loaded pesquisadores from Google Sheet.")
+            base_df = pd.read_excel(BytesIO(content), header=0)
+            print("Loaded pesquisadores base sheet from Google Sheet.")
         elif os.path.exists(LOCAL_PESQUISADORES):
-            PESQUISADORES_DF = pd.read_excel(LOCAL_PESQUISADORES, header=0)
-            print("Loaded pesquisadores from local file (Google Sheet unavailable).")
-        
-        if PESQUISADORES_DF is not None:
-            import unicodedata as _ud
+            base_df = pd.read_excel(LOCAL_PESQUISADORES, header=0)
+            print("Loaded pesquisadores base sheet from local cache (Google Sheet unavailable).")
+        if base_df is not None:
             # NFC-normalize so decomposed accents (from Google Sheets) match source literals
-            PESQUISADORES_DF.columns = [
-                _ud.normalize('NFC', c).lower().strip() for c in PESQUISADORES_DF.columns
-            ]
+            base_df.columns = [_ud.normalize('NFC', c).lower().strip() for c in base_df.columns]
+
+        api_df = fetch_pesquisadores_api()
+        if api_df is not None:
+            PESQUISADORES_DF = merge_pesquisadores(base_df, api_df)
+            # Cache the merged result for offline fallback and stamp the refresh date.
+            try:
+                os.makedirs(os.path.dirname(LOCAL_PESQUISADORES), exist_ok=True)
+                PESQUISADORES_DF.to_excel(LOCAL_PESQUISADORES, index=False)
+            except Exception as _e:
+                print(f"  (could not cache merged pesquisadores: {_e})")
+            try:
+                _d = load_data_dates()
+                _d['pesquisadores'] = datetime.date.today().isoformat()
+                save_data_dates(_d)
+            except Exception as _e:
+                print(f"  (could not update pesquisadores date: {_e})")
+        else:
+            # API unavailable — fall back to the base sheet / local cache unchanged.
+            PESQUISADORES_DF = base_df
+
+        if PESQUISADORES_DF is not None:
             print(f"  {len(PESQUISADORES_DF)} researchers loaded. columns={list(PESQUISADORES_DF.columns)}")
     except Exception as e:
         print(f"ERROR loading pesquisadores: {e}")

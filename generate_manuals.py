@@ -273,6 +273,11 @@ def build_english(path):
         'After login the main page shows two analysis-type cards. Click one, enter a '
         'taxon name in the text field (or click a chip from your authorised taxa list '
         'to fill it automatically), then press the action button.', S['body']))
+    story.append(Paragraph(
+        'The login page and the main page both display the date of the catalogue copy '
+        'currently in use (and the researcher-registry date). The catalogue is refreshed '
+        'automatically from the official JBRJ Fauna do Brasil source — see §4.4.',
+        S['note']))
 
     # 2. Data Completeness
     story += [PageBreak(), Paragraph('2. Data Completeness Analysis', S['h1']), rule()]
@@ -560,12 +565,53 @@ def build_english(path):
 
     story += [Paragraph('4.3  Data Sources', S['h2'])]
     story.append(Paragraph(
-        'Two Google Sheets are loaded on startup. If unreachable, the system falls '
-        'back to local XLSX files in the <i>data/</i> directory.', S['body']))
+        'Two datasets are loaded on startup, both from the official JBRJ Fauna do Brasil '
+        'APIs. The <b>catalogue</b> is downloaded directly; the <b>researcher registry</b> '
+        'is built by merging the live JBRJ contribution report with a curated Google Sheet '
+        '(see §4.4). Each result is cached to the <i>data/</i> directory after a successful '
+        'load, and the cached copy is used automatically if a source is temporarily '
+        'unreachable.', S['body']))
     story.append(output_table([
-        ('pesquisadores.xlsx',      'Researcher registry: login, nome_completo, táxons, institution. Drives authorisation and researcher attribution.'),
-        ('planilha_extendida.xlsx', 'Extended CTFB catalogue (Darwin Core + manual fields). Source for all completeness calculations.'),
+        ('planilha_extendida.csv',
+         'Extended CTFB catalogue (Darwin Core + manual fields). Downloaded from the '
+         'JBRJ Fauna do Brasil PostgREST API '
+         '(<font name="Courier" size="8">fauna.jbrj.gov.br/rest/mv_planilha_extendida</font>), '
+         'paginated in pages of 5 000 records. Source for all completeness calculations.'),
+        ('pesquisadores.xlsx',
+         'Researcher registry: login, nome_completo, táxons, institution, email. '
+         'login / nome_completo / e-mail and the assigned taxa come from the JBRJ '
+         'contribution report; <i>institution</i> comes from the curated Google Sheet. '
+         'Drives authorisation and researcher attribution.'),
     ], S, col1='File', col2='Contents'))
+
+    story += [Paragraph('4.4  Keeping the Data Up to Date', S['h2'])]
+    story.append(Paragraph(
+        'Both the catalogue and the researcher registry are served from a recent copy of '
+        'the official JBRJ sources, kept current automatically — no manual upload is '
+        'required.', S['body']))
+    for item in [
+        '<b>On every startup, and again daily at 03:00 (America/São_Paulo)</b>, a scheduled '
+        'job re-downloads the catalogue and the researcher contribution report and reloads '
+        'both into memory, so a long-running instance never drifts out of date. '
+        '(The scheduler can be disabled with the <i>ENABLE_SCHEDULER=0</i> environment '
+        'variable.)',
+        '<b>Catalogue</b> — downloaded in full from the Fauna do Brasil API. The download '
+        'is atomic and fail-safe: the new file replaces the previous one only after a '
+        'complete, successful download; if the API is unreachable or returns no rows, the '
+        'last good cached copy is kept and analyses continue uninterrupted.',
+        '<b>Researcher registry</b> — login, nome_completo, e-mail and the taxa assigned '
+        'to each researcher are taken from the JBRJ contribution report '
+        '(<font name="Courier" size="8">mv_relatorio_contribuicao_usuarios</font>); the '
+        '<i>institution</i> field and any researcher not present in the report are merged '
+        'in from the curated Google Sheet. If a researcher has no taxa in the report, the '
+        'taxa from the sheet are kept as a fallback.',
+    ]:
+        story.append(Paragraph(f'• {item}', S['bullet']))
+    story.append(Paragraph(
+        'The dates of the catalogue and researcher-registry copies currently in use are '
+        'shown to every user on both the login page and the main page (e.g. '
+        '<i>Catalogue: 2026-06-22 · Researchers: 2026-06-22</i>), so you can always '
+        'confirm how fresh the data is.', S['note']))
 
     # 5. Interpreting
     story += [PageBreak(), Paragraph('5. Interpreting Results', S['h1']), rule()]
@@ -705,6 +751,10 @@ def build_portuguese(path):
         'Clique no cartão desejado, informe o nome do táxon (ou clique em um dos '
         'botões de táxons autorizados para preenchimento automático) e pressione '
         'o botão de ação.', S['body']))
+    story.append(Paragraph(
+        'A tela de login e a página principal exibem a data da cópia do catálogo em uso '
+        '(e a data do cadastro de pesquisadores). O catálogo é atualizado automaticamente '
+        'a partir da fonte oficial da Fauna do Brasil (JBRJ) — ver §4.4.', S['note']))
 
     # 2. Completude dos Dados
     story += [PageBreak(), Paragraph('2. Análise de Completude dos Dados', S['h1']), rule()]
@@ -995,13 +1045,55 @@ def build_portuguese(path):
 
     story += [Paragraph('4.3  Fontes de Dados', S['h2'])]
     story.append(Paragraph(
-        'O sistema carrega duas planilhas do Google Sheets na inicialização. Se '
-        'inacessíveis, usa arquivos XLSX locais no diretório <i>data/</i>.',
-        S['body']))
+        'Dois conjuntos de dados são carregados na inicialização, ambos a partir das APIs '
+        'oficiais da Fauna do Brasil (JBRJ). O <b>catálogo</b> é baixado diretamente; o '
+        '<b>cadastro de pesquisadores</b> é montado mesclando o relatório de contribuição '
+        'ao vivo da JBRJ com uma planilha curada do Google Sheets (ver §4.4). Cada '
+        'resultado é armazenado em cache no diretório <i>data/</i> após um carregamento '
+        'bem-sucedido, e a cópia em cache é usada automaticamente se uma fonte estiver '
+        'temporariamente indisponível.', S['body']))
     story.append(output_table([
-        ('pesquisadores.xlsx',      'Cadastro de pesquisadores: login, nome_completo, táxons, institution. Controla autorização e atribuição de pesquisador.'),
-        ('planilha_extendida.xlsx', 'Catálogo CTFB estendido (Darwin Core + campos manuais). Fonte de todos os cálculos de completude.'),
+        ('planilha_extendida.csv',
+         'Catálogo CTFB estendido (Darwin Core + campos manuais). Baixado da API '
+         'PostgREST da Fauna do Brasil (JBRJ) '
+         '(<font name="Courier" size="8">fauna.jbrj.gov.br/rest/mv_planilha_extendida</font>), '
+         'paginado em páginas de 5 000 registros. Fonte de todos os cálculos de completude.'),
+        ('pesquisadores.xlsx',
+         'Cadastro de pesquisadores: login, nome_completo, táxons, institution, email. '
+         'login / nome_completo / e-mail e os táxons atribuídos vêm do relatório de '
+         'contribuição da JBRJ; o campo <i>institution</i> vem da planilha curada do '
+         'Google Sheets. Controla autorização e atribuição de pesquisador.'),
     ], S, col1='Arquivo', col2='Conteúdo'))
+
+    story += [Paragraph('4.4  Mantendo os Dados Atualizados', S['h2'])]
+    story.append(Paragraph(
+        'Tanto o catálogo quanto o cadastro de pesquisadores são servidos a partir de '
+        'cópias recentes das fontes oficiais da JBRJ, mantidas atualizadas automaticamente '
+        '— nenhum upload manual é necessário.', S['body']))
+    for item in [
+        '<b>A cada inicialização e, novamente, diariamente às 03:00 (America/São_Paulo)</b>, '
+        'uma tarefa agendada rebaixa o catálogo e o relatório de contribuição de '
+        'pesquisadores e recarrega ambos na memória, de modo que uma instância em execução '
+        'prolongada nunca fique desatualizada. (O agendador pode ser desativado com a '
+        'variável de ambiente <i>ENABLE_SCHEDULER=0</i>.)',
+        '<b>Catálogo</b> — baixado integralmente da API da Fauna do Brasil. O download é '
+        'atômico e à prova de falhas: o novo arquivo substitui o anterior apenas após um '
+        'download completo e bem-sucedido; se a API estiver indisponível ou não retornar '
+        'registros, a última cópia válida em cache é mantida e as análises continuam sem '
+        'interrupção.',
+        '<b>Cadastro de pesquisadores</b> — login, nome_completo, e-mail e os táxons '
+        'atribuídos a cada pesquisador vêm do relatório de contribuição da JBRJ '
+        '(<font name="Courier" size="8">mv_relatorio_contribuicao_usuarios</font>); o campo '
+        '<i>institution</i> e qualquer pesquisador ausente do relatório são mesclados a '
+        'partir da planilha curada do Google Sheets. Se um pesquisador não tiver táxons no '
+        'relatório, os táxons da planilha são mantidos como fallback.',
+    ]:
+        story.append(Paragraph(f'• {item}', S['bullet']))
+    story.append(Paragraph(
+        'As datas das cópias do catálogo e do cadastro de pesquisadores em uso são '
+        'exibidas a todos os usuários tanto na tela de login quanto na página principal '
+        '(ex: <i>Catálogo: 2026-06-22 · Pesquisadores: 2026-06-22</i>), para que você '
+        'sempre confirme o quão atualizados estão os dados.', S['note']))
 
     # 5. Interpretação
     story += [PageBreak(), Paragraph('5. Interpretando os Resultados', S['h1']), rule()]
