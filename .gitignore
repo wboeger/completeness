@@ -31,5 +31,9 @@ temp_zips/
 # Project Data
 /data/
 
+# Fauna API dumps (download_fauna.py output — regenerable, large)
+mv_planilha_extendida.csv
+mv_planilha_extendida.json
+
 # macOS
 .DS_Store
