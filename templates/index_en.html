@@ -32,11 +32,12 @@
 
         label.field-label { display: block; font-weight: 600; color: #34495e;
                              margin-bottom: .4rem; font-size: .95rem; }
-        input[type=text] { width: 100%; padding: .65rem .9rem; border: 1px solid #ccc;
+        input[type=text], select { width: 100%; padding: .65rem .9rem; border: 1px solid #ccc;
                            border-radius: 6px; font-size: 1rem; box-sizing: border-box;
-                           margin-bottom: .7rem; }
-        input[type=text]:focus { outline: none; border-color: #3498db;
+                           margin-bottom: .7rem; background: white; }
+        input[type=text]:focus, select:focus { outline: none; border-color: #3498db;
                                   box-shadow: 0 0 0 2px rgba(52,152,219,.2); }
+        .field-hint { font-size: .78rem; color: #95a5a6; margin: -.4rem 0 .7rem; line-height: 1.35; }
         button[type=submit] { width: 100%; padding: .75rem; background: #2980b9; color: white;
                               border: none; border-radius: 6px; font-size: 1rem; font-weight: 700;
                               cursor: pointer; margin-top: .2rem; transition: background .15s; }
@@ -136,6 +137,20 @@
         <p class="gbif-note" id="gbifNote">
             The analysis queries the GBIF API in real time. For large groups it
             may take several minutes. The page will update automatically with progress.
+        </p>
+
+        <label class="field-label" for="category">Category <span style="font-weight:400;color:#95a5a6;">(optional)</span></label>
+        <select id="category" name="category">
+            <option value="">Any level (automatic search)</option>
+            <option value="phylum">Phylum</option>
+            <option value="class">Class</option>
+            <option value="order">Order</option>
+            <option value="family">Family</option>
+            <option value="genus">Genus</option>
+        </select>
+        <p class="field-hint">
+            Choose the category of the name you are searching to restrict the search to that level.
+            Leave blank to look for the name across all taxonomic levels.
         </p>
 
         <label class="field-label" for="taxon">Taxon</label>

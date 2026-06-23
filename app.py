@@ -998,7 +998,7 @@ def generate_completeness_chart(dataframe, category_column, title_label, sort_co
         pdf.savefig(fig)
     plt.close(fig)
 
-def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
+def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=None):
     import sys as _sys
     def _dbg(msg):
         print(msg, file=_sys.stderr, flush=True)
@@ -1011,23 +1011,33 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df):
             'genus', 'subgenus',
         ]
 
+        # Optional category: restrict the match to a single rank column when the
+        # user explicitly chose one; otherwise search the whole hierarchy.
+        category = (category or '').strip().lower() or None
+        if category and category not in planilha_df.columns:
+            _dbg(f"[analysis] '{taxon_filter}': requested category '{category}' not a known rank column; ignoring")
+            category = None
+        ranks_to_search = [category] if category else RANK_HIERARCHY
+
         _rank_cols = [r for r in RANK_HIERARCHY if r in planilha_df.columns]
-        _dbg(f"[analysis] '{taxon_filter}' start. planilha cols={list(planilha_df.columns[:10])} rank_cols_found={_rank_cols}")
-        # --- Filter rows matching the requested taxon across all rank columns ---
+        _dbg(f"[analysis] '{taxon_filter}' start (category={category}). planilha cols={list(planilha_df.columns[:10])} rank_cols_found={_rank_cols}")
+        # --- Filter rows matching the requested taxon ---
         mask = pd.Series(False, index=planilha_df.index)
-        for rank in RANK_HIERARCHY:
+        for rank in ranks_to_search:
             if rank in planilha_df.columns:
                 mask |= (planilha_df[rank].str.lower() == taxon_filter.lower())
         filtered_data = planilha_df[mask].copy()
         _dbg(f"[analysis] '{taxon_filter}': {len(filtered_data)} rows matched rank filter")
         if filtered_data.empty:
-            diag = f"no rows matched '{taxon_filter}' in rank cols {_rank_cols}"
+            scope = f"category '{category}'" if category else f"rank cols {_rank_cols}"
+            diag = f"no rows matched '{taxon_filter}' in {scope}"
             _dbg(f"[analysis] {diag}")
             return None, None, diag
 
-        # Determine which rank the input taxon belongs to
+        # Determine which rank the input taxon belongs to (honour the chosen
+        # category first, then fall back to scanning the hierarchy).
         taxon_rank_col = None
-        for col in RANK_HIERARCHY:
+        for col in ([category] if category else []) + RANK_HIERARCHY:
             if col in filtered_data.columns:
                 if (filtered_data[col].str.lower() == taxon_filter.lower()).any():
                     taxon_rank_col = col
@@ -1808,11 +1818,12 @@ def analyze_taxon():
 
     user = User.query.get(session['user_id'])
     taxon_input = request.form['taxon'].strip()
+    category = request.form.get('category', '').strip()
     if not taxon_input:
         flash("Taxon cannot be empty.", 'warning')
         return redirect(url_for('index'))
 
-    result_zip_path, summary, diag = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF)
+    result_zip_path, summary, diag = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF, category=category)
 
     if result_zip_path and summary:
         result_id = uuid.uuid4().hex
