@@ -73,10 +73,10 @@
     <div class="date-notice">
         <strong>Dados utilizados nesta análise:</strong>
         {% if data_dates.planilha_extendida %}
-        Planilha Estendida: <strong>{{ data_dates.planilha_extendida }}</strong>{% if data_dates.pesquisadores %} &nbsp;·&nbsp; {% endif %}
+        Catálogo atualizado em <strong>{{ data_dates.planilha_extendida }}</strong>{% if data_dates.pesquisadores %} &nbsp;·&nbsp; {% endif %}
         {% endif %}
         {% if data_dates.pesquisadores %}
-        Pesquisadores: <strong>{{ data_dates.pesquisadores }}</strong>
+        Pesquisadores atualizados em <strong>{{ data_dates.pesquisadores }}</strong>
         {% endif %}
         {% if data_dates.nota %}
         <br>{{ data_dates.nota }}

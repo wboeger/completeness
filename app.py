@@ -1819,21 +1819,6 @@ def admin_dashboard():
                            is_admin=True, using_postgres=_USING_POSTGRES,
                            data_dates=load_data_dates())
 
-@app.route('/admin/set_data_dates', methods=['POST'])
-def set_data_dates():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
-    dates = {
-        'planilha_extendida': request.form.get('planilha_extendida', '').strip(),
-        'pesquisadores':      request.form.get('pesquisadores', '').strip(),
-        'nota':               request.form.get('nota', '').strip(),
-    }
-    save_data_dates(dates)
-    flash('Datas dos arquivos atualizadas.', 'success')
-    return redirect(url_for('admin_dashboard'))
-
-
 @app.route('/admin/upload_data', methods=['POST'])
 def upload_data():
     """Admin: upload pesquisadores.xlsx and/or planilha_extendida.xlsx directly."""

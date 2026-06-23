@@ -131,58 +131,31 @@
             </div>
         </div>
 
-        <h3>Data file dates</h3>
-        <div style="background:#fef9e7; border:1px solid #f9e07a; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
+        <h3>Data refresh dates</h3>
+        <div style="background:#eafaf1; border:1px solid #abebc6; border-radius:6px; padding:1rem 1.2rem; margin-bottom:1.2rem;">
             <p style="margin:0 0 .8rem; font-size:.92rem;">
-                Enter the reference dates for the files used in analyses.
-                These dates will be shown to users on the results page.
+                These dates are recorded automatically on every data refresh
+                (at startup and daily at 03:00 America/São_Paulo). No manual entry
+                is required.
             </p>
-            <form method="POST" action="{{ url_for('set_data_dates') }}">
-                <table style="border:none; width:auto; font-size:.9rem;">
-                    <tr>
-                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
-                            Extended Spreadsheet
-                        </td>
-                        <td style="border:none; padding:.3rem 0;">
-                            <input type="text" name="planilha_extendida"
-                                   value="{{ data_dates.planilha_extendida }}"
-                                   placeholder="e.g.: 28/04/2026"
-                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:180px;">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
-                            Researchers
-                        </td>
-                        <td style="border:none; padding:.3rem 0;">
-                            <input type="text" name="pesquisadores"
-                                   value="{{ data_dates.pesquisadores }}"
-                                   placeholder="e.g.: 28/04/2026"
-                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:180px;">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
-                            Additional note
-                        </td>
-                        <td style="border:none; padding:.3rem 0;">
-                            <input type="text" name="nota"
-                                   value="{{ data_dates.nota }}"
-                                   placeholder="e.g.: Reference version for the annual report"
-                                   style="font-size:.9rem; padding:.3rem .5rem; border:1px solid #ccc; border-radius:4px; width:340px;">
-                        </td>
-                    </tr>
-                    <tr>
-                        <td colspan="2" style="border:none; padding:.6rem 0 0 0;">
-                            <button type="submit" style="background:#2980b9; color:white; border:none;
-                                    padding:.5rem 1.3rem; border-radius:4px; font-weight:600;
-                                    cursor:pointer; font-size:.9rem;">
-                                Save dates
-                            </button>
-                        </td>
-                    </tr>
-                </table>
-            </form>
+            <table style="border:none; width:auto; font-size:.9rem;">
+                <tr>
+                    <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                        Catalogue (Extended Spreadsheet)
+                    </td>
+                    <td style="border:none; padding:.3rem 0;">
+                        <strong>{{ data_dates.planilha_extendida or '—' }}</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="border:none; padding:.3rem .6rem .3rem 0; font-weight:600; white-space:nowrap;">
+                        Researchers
+                    </td>
+                    <td style="border:none; padding:.3rem 0;">
+                        <strong>{{ data_dates.pesquisadores or '—' }}</strong>
+                    </td>
+                </tr>
+            </table>
         </div>
 
         <h3>Users</h3>

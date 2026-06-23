@@ -49,11 +49,11 @@
     {% if data_dates.planilha_extendida or data_dates.pesquisadores %}
     <p class="db-dates">
         {% if data_dates.planilha_extendida %}
-        Catálogo: <strong>{{ data_dates.planilha_extendida }}</strong>
+        Catálogo atualizado em <strong>{{ data_dates.planilha_extendida }}</strong>
         {% endif %}
         {% if data_dates.planilha_extendida and data_dates.pesquisadores %} &nbsp;·&nbsp; {% endif %}
         {% if data_dates.pesquisadores %}
-        Pesquisadores: <strong>{{ data_dates.pesquisadores }}</strong>
+        Pesquisadores atualizados em <strong>{{ data_dates.pesquisadores }}</strong>
         {% endif %}
     </p>
     {% endif %}
