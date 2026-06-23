@@ -43,18 +43,21 @@
     <div class="container">
         <h2>Admin Dashboard</h2>
 
-        {% if not using_postgres %}
+        {% if not db_persistent %}
         <div class="alert-sqlite">
-            <strong>⚠ Warning: SQLite database detected.</strong>
+            <strong>⚠ Warning: ephemeral SQLite database detected.</strong>
             User data <strong>will be lost</strong> on every redeploy.
-            Set the <code>DATABASE_URL</code> environment variable in Railway pointing to a
-            PostgreSQL database for permanent persistence.
-            In the meantime, use the <strong>Export CSV</strong> button below to back up
-            before each update.
+            Set <code>DATABASE_URL</code> (PostgreSQL) or mount a volume at the
+            <code>data/</code> directory for persistence. In the meantime, use the
+            <strong>Export CSV</strong> button below to back up before each update.
+        </div>
+        {% elif using_postgres %}
+        <div class="alert-pg">
+            Database: <strong>PostgreSQL</strong> — data persists across deployments.
         </div>
         {% else %}
         <div class="alert-pg">
-            Database: <strong>PostgreSQL</strong> — data persists across deployments.
+            Database: <strong>SQLite on a persistent volume</strong> — data persists across deployments.
         </div>
         {% endif %}
 

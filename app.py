@@ -26,7 +26,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
 
 # --- Configuration ---
-DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///users.db')
+# Default to a SQLite file inside the data/ directory. On Railway this folder is a
+# mounted persistent volume (/app/data), so the database survives redeploys without
+# needing a separate Postgres service. Override with DATABASE_URL for Postgres.
+_DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'users.db')
+os.makedirs(os.path.dirname(_DEFAULT_DB_PATH), exist_ok=True)
+DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{_DEFAULT_DB_PATH}')
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -1619,15 +1624,19 @@ def start_scheduler():
 
 # --- Flask Routes ---
 _USING_POSTGRES = 'postgresql' in DATABASE_URL
+# SQLite stored inside the data/ volume mount persists across redeploys too.
+_DB_PERSISTENT = _USING_POSTGRES or os.path.dirname(_DEFAULT_DB_PATH) in DATABASE_URL
 ANALYSIS_RESULTS = {}   # result_id → {zip_path, summary}
 
 with app.app_context():
     load_data_on_startup()
     if _USING_POSTGRES:
         print(f"[DB] Connected to PostgreSQL — data will persist across deployments.")
+    elif _DB_PERSISTENT:
+        print(f"[DB] Using SQLite on persistent volume ({DATABASE_URL}) — data persists across redeploys.")
     else:
         print(f"[DB] WARNING: Using SQLite ({DATABASE_URL}) — data WILL be lost on redeploy! "
-              "Set DATABASE_URL in Railway environment variables.")
+              "Set DATABASE_URL or mount a volume at the data/ directory.")
     db.create_all()
     print("[DB] Tables created/verified.")
     run_db_migrations()
@@ -1841,6 +1850,7 @@ def admin_dashboard():
     return render_template(tmpl('admin'), users=users,
                            username=User.query.get(session['user_id']).username,
                            is_admin=True, using_postgres=_USING_POSTGRES,
+                           db_persistent=_DB_PERSISTENT,
                            data_dates=load_data_dates())
 
 @app.route('/admin/upload_data', methods=['POST'])

@@ -43,18 +43,21 @@
     <div class="container">
         <h2>Admin Dashboard</h2>
 
-        {% if not using_postgres %}
+        {% if not db_persistent %}
         <div class="alert-sqlite">
-            <strong>⚠ Atenção: banco de dados SQLite detectado.</strong>
+            <strong>⚠ Atenção: banco de dados SQLite efêmero detectado.</strong>
             Os dados de usuários <strong>serão perdidos</strong> a cada redeploy.
-            Configure a variável de ambiente <code>DATABASE_URL</code> no Railway apontando
-            para um banco PostgreSQL para persistência permanente.
-            Enquanto isso, use o botão <strong>Exportar CSV</strong> abaixo para fazer backup
-            antes de cada atualização.
+            Configure <code>DATABASE_URL</code> (PostgreSQL) ou monte um volume no
+            diretório <code>data/</code> para persistência. Enquanto isso, use o botão
+            <strong>Exportar CSV</strong> abaixo para fazer backup antes de cada atualização.
+        </div>
+        {% elif using_postgres %}
+        <div class="alert-pg">
+            Banco de dados: <strong>PostgreSQL</strong> — dados persistem entre deployments.
         </div>
         {% else %}
         <div class="alert-pg">
-            Banco de dados: <strong>PostgreSQL</strong> — dados persistem entre deployments.
+            Banco de dados: <strong>SQLite em volume persistente</strong> — dados persistem entre deployments.
         </div>
         {% endif %}
 
