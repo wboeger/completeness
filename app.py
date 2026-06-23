@@ -1316,6 +1316,19 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
             species_data.loc[is_parasite, 'total_applicable'] += 1.0
             filled_count += is_parasite.astype(float) * host_filled
 
+        # Bibliography rule: bibliographicReference and controlledBibliography form
+        # a single slot — if either is filled the slot counts as filled. Collapse the
+        # two columns into one (1 applicable slot, filled when either is present).
+        bib_in  = 'bibliographicreference' in manual_present
+        ctrl_in = 'controlledbibliography' in manual_present
+        if bib_in and ctrl_in:
+            filled_count -= filled_matrix['bibliographicreference'].astype(float)
+            filled_count -= filled_matrix['controlledbibliography'].astype(float)
+            species_data['total_applicable'] -= 1.0   # two columns → one slot
+            bib_filled = (filled_matrix['bibliographicreference'] |
+                          filled_matrix['controlledbibliography']).astype(float)
+            filled_count += bib_filled
+
         species_data['filled_count'] = filled_count.values
         species_data['completeness'] = (species_data['filled_count'] / species_data['total_applicable']) * 100
 
@@ -1350,6 +1363,15 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
             applicable_mask.loc[is_empty_lf | is_vida_livre | is_herbivore | is_parasite, 'animalhostnames'] = False
         if vegetal_in:
             applicable_mask.loc[is_empty_lf | is_vida_livre | is_parasite, 'vegetalhostnames'] = False
+
+        # Bibliography slot: represent on bibliographicReference (filled when either
+        # bibliographicReference OR controlledBibliography is present); fold the
+        # controlledBibliography column out of the per-field report.
+        if bib_in and ctrl_in:
+            effective_filled.loc[:, 'bibliographicreference'] = (
+                filled_matrix['bibliographicreference'] | filled_matrix['controlledbibliography']
+            )
+            applicable_mask.loc[:, 'controlledbibliography'] = False
 
         unfilled_mask = applicable_mask & ~effective_filled
 
@@ -1392,6 +1414,11 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
 
         for _col in manual_present:
             missing_fields_df[_FIELD_DWC.get(_col, _col)] = unfilled_mask[_col].map({True: 'faltante', False: ''})
+
+        # controlledBibliography is folded into the bibliographicReference slot — drop
+        # its (always-empty) per-field column from the report.
+        if bib_in and ctrl_in:
+            missing_fields_df.drop(columns=['controlledBibliography'], inplace=True, errors='ignore')
 
         # Combined host slot for parasites
         if (animal_in or vegetal_in) and is_parasite.any():
