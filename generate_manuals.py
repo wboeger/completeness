@@ -259,9 +259,11 @@ def build_english(path):
         'If you forget your password, you cannot reset it yourself. Two recovery options:',
         S['body']))
     for b in [
-        '<b>Contact your administrator</b> — the administrator clicks <i>Reset password</i> '
-        'next to your account in the Admin Dashboard. This clears your password and sets '
-        'the "must set password" flag, so your next login follows the first-access flow.',
+        '<b>Contact your administrator</b> — next to your account in the Admin Dashboard the '
+        'administrator can either <i>Reset password</i> (clears it and sets the "must set '
+        'password" flag, so your next login follows the first-access flow) or <i>Set '
+        'password</i> directly to a new working password they give you, which you can change '
+        'afterwards (see §1.5).',
         '<b>Write to support</b> — e-mail '
         '<font name="Courier">faunadobrasilctfb@gmail.com</font> with your username. '
         'The team will ask an administrator to reset your account.',
@@ -270,14 +272,24 @@ def build_english(path):
 
     story += [Paragraph('1.4  Main Page', S['h2'])]
     story.append(Paragraph(
-        'After login the main page shows two analysis-type cards. Click one, enter a '
+        'After login the main page shows the analysis-type cards. Click one, enter a '
         'taxon name in the text field (or click a chip from your authorised taxa list '
-        'to fill it automatically), then press the action button.', S['body']))
+        'to fill it automatically), then press the action button. The footer also offers '
+        'a <i>Manual</i> link (opens this manual in your language) and a <i>Change '
+        'password</i> link (see §1.5).', S['body']))
     story.append(Paragraph(
         'The login page and the main page both display the date of the catalogue copy '
         'currently in use (and the researcher-registry date). The catalogue is refreshed '
         'automatically from the official JBRJ Fauna do Brasil source — see §4.4.',
         S['note']))
+
+    story += [Paragraph('1.5  Changing Your Password', S['h2'])]
+    story.append(Paragraph(
+        'Once logged in you can change your own password at any time. Click <i>Change '
+        'password</i> in the main-page footer, enter your current password, then the new '
+        'password twice (at least 6 characters) and confirm. The change takes effect '
+        'immediately and is used on every subsequent login. This works both for passwords '
+        'you created yourself and for a password an administrator set for you.', S['body']))
 
     # 2. Data Completeness
     story += [PageBreak(), Paragraph('2. Data Completeness Analysis', S['h1']), rule()]
@@ -541,6 +553,9 @@ def build_english(path):
         'Existing accounts are skipped; hashed passwords are restored.',
         '<b>Reset password</b> — clears a user\'s password and sets the '
         '"must set password" flag. The user follows the first-access flow on next login.',
+        '<b>Set password</b> — set a specific, immediately usable password for a user '
+        'directly (no first-access flow). Useful for users who already completed first '
+        'access. The user can change it afterwards (§1.5).',
     ]:
         story.append(Paragraph(f'• {item}', S['bullet']))
     story.append(Paragraph(
@@ -558,9 +573,15 @@ def build_english(path):
         [Paragraph('PostgreSQL', S['body']),
          Paragraph('Permanent — survives all redeployments.', S['body']),
          Paragraph('Set DATABASE_URL to a postgresql:// connection string (e.g. from Railway).', S['body'])],
-        [Paragraph('SQLite', S['body']),
+        [Paragraph('SQLite on a volume', S['body']),
+         Paragraph('Permanent — stored on a mounted persistent volume.', S['body']),
+         Paragraph('Default: the database file lives in the <i>data/</i> directory. When that '
+                   'directory is a mounted volume (e.g. Railway volume at /app/data), it survives '
+                   'redeployments. The Admin Dashboard confirms "SQLite on a persistent volume".', S['body'])],
+        [Paragraph('SQLite (ephemeral)', S['body']),
          Paragraph('Ephemeral — lost on each redeployment.', S['body']),
-         Paragraph('Default when DATABASE_URL is not set. A warning banner appears on the Admin Dashboard.', S['body'])],
+         Paragraph('Occurs only if the <i>data/</i> directory is not on a persistent volume. '
+                   'A warning banner appears on the Admin Dashboard.', S['body'])],
     ], S))
 
     story += [Paragraph('4.3  Data Sources', S['h2'])]
@@ -733,12 +754,13 @@ def build_portuguese(path):
 
     story += [Paragraph('1.3  Senha Esquecida', S['h2'])]
     story.append(Paragraph(
-        'Não é possível redefinir a senha por conta própria. Duas opções:', S['body']))
+        'Não é possível redefinir a senha esquecida por conta própria. Duas opções:', S['body']))
     for b in [
-        '<b>Contate o administrador</b> — ele clica em <i>Redefinir senha</i> ao lado '
-        'da sua conta no Painel Admin. Isso apaga a senha atual e ativa o flag '
-        '"deve definir senha", de modo que no próximo acesso você seguirá o fluxo '
-        'do primeiro acesso.',
+        '<b>Contate o administrador</b> — ao lado da sua conta no Painel Admin, ele pode '
+        '<i>Redefinir senha</i> (apaga a senha e ativa o flag "deve definir senha", de modo '
+        'que no próximo acesso você segue o fluxo do primeiro acesso) ou <i>Definir senha</i> '
+        'diretamente para uma nova senha que ele lhe informa, a qual você pode alterar depois '
+        '(ver §1.5).',
         '<b>Escreva para o suporte</b> — envie e-mail para '
         '<font name="Courier">faunadobrasilctfb@gmail.com</font> com seu nome de '
         'usuário. A equipe solicitará ao administrador que redefina seu acesso.',
@@ -747,14 +769,24 @@ def build_portuguese(path):
 
     story += [Paragraph('1.4  Página Principal', S['h2'])]
     story.append(Paragraph(
-        'Após o login, a página principal exibe dois cartões de seleção de análise. '
+        'Após o login, a página principal exibe os cartões de seleção de análise. '
         'Clique no cartão desejado, informe o nome do táxon (ou clique em um dos '
         'botões de táxons autorizados para preenchimento automático) e pressione '
-        'o botão de ação.', S['body']))
+        'o botão de ação. O rodapé também oferece um link <i>Manual</i> (abre este '
+        'manual no seu idioma) e um link <i>Alterar senha</i> (ver §1.5).', S['body']))
     story.append(Paragraph(
         'A tela de login e a página principal exibem a data da cópia do catálogo em uso '
         '(e a data do cadastro de pesquisadores). O catálogo é atualizado automaticamente '
         'a partir da fonte oficial da Fauna do Brasil (JBRJ) — ver §4.4.', S['note']))
+
+    story += [Paragraph('1.5  Alterando Sua Senha', S['h2'])]
+    story.append(Paragraph(
+        'Após autenticado, você pode alterar sua própria senha a qualquer momento. Clique '
+        'em <i>Alterar senha</i> no rodapé da página principal, informe a senha atual e, em '
+        'seguida, a nova senha duas vezes (no mínimo 6 caracteres) e confirme. A alteração '
+        'tem efeito imediato e passa a ser usada em todos os acessos seguintes. Funciona '
+        'tanto para senhas que você mesmo criou quanto para uma senha definida por um '
+        'administrador.', S['body']))
 
     # 2. Completude dos Dados
     story += [PageBreak(), Paragraph('2. Análise de Completude dos Dados', S['h1']), rule()]
@@ -1021,6 +1053,9 @@ def build_portuguese(path):
         'Contas existentes são ignoradas; os hashes de senha são restaurados.',
         '<b>Redefinir senha</b> — apaga a senha de um usuário e ativa o flag '
         '"deve definir senha". No próximo acesso o usuário segue o fluxo do primeiro acesso.',
+        '<b>Definir senha</b> — define diretamente uma senha específica e imediatamente '
+        'utilizável para um usuário (sem fluxo de primeiro acesso). Útil para usuários que já '
+        'concluíram o primeiro acesso. O usuário pode alterá-la depois (§1.5).',
     ]:
         story.append(Paragraph(f'• {item}', S['bullet']))
     story.append(Paragraph(
@@ -1038,9 +1073,15 @@ def build_portuguese(path):
         [Paragraph('PostgreSQL', S['body']),
          Paragraph('Permanente — sobrevive a todos os redeployments.', S['body']),
          Paragraph('Defina DATABASE_URL com uma string postgresql:// (ex: pelo Railway).', S['body'])],
-        [Paragraph('SQLite', S['body']),
+        [Paragraph('SQLite em volume', S['body']),
+         Paragraph('Permanente — armazenado em um volume persistente montado.', S['body']),
+         Paragraph('Padrão: o arquivo do banco fica no diretório <i>data/</i>. Quando esse '
+                   'diretório é um volume montado (ex: volume Railway em /app/data), sobrevive aos '
+                   'redeployments. O Painel Admin confirma "SQLite em volume persistente".', S['body'])],
+        [Paragraph('SQLite (efêmero)', S['body']),
          Paragraph('Efêmero — dados perdidos a cada redeploy.', S['body']),
-         Paragraph('Padrão quando DATABASE_URL não está definida. Um banner de aviso aparece no Painel Admin.', S['body'])],
+         Paragraph('Ocorre apenas se o diretório <i>data/</i> não estiver em um volume persistente. '
+                   'Um banner de aviso aparece no Painel Admin.', S['body'])],
     ], S))
 
     story += [Paragraph('4.3  Fontes de Dados', S['h2'])]
