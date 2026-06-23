@@ -302,6 +302,13 @@ def build_english(path):
         'units. Results are aggregated by family, order, class, sub-class, and phylum. '
         'When the input taxon is a family, an additional breakdown by genus is produced.',
         S['body']))
+    story.append(Paragraph(
+        'The analysis runs in the background on the server. After you submit, a status '
+        'page is shown with a progress indicator and refreshes automatically; when the '
+        'analysis finishes it redirects to the results page. Large taxa (e.g. Hexapoda, '
+        'Coleoptera) may take several minutes — you can leave the tab open and the page '
+        'will advance on its own. If anything fails, the error is shown on the status '
+        'page instead of interrupting the application.', S['note']))
 
     story += [Paragraph('2.1  The 15 Evaluated Fields', S['h2'])]
     story.append(Paragraph(
@@ -799,6 +806,13 @@ def build_portuguese(path):
         'unidades de análise. Os resultados são agregados por família, ordem, classe, '
         'subclasse e filo. Quando o táxon de entrada é uma família, é gerada também '
         'uma agregação por gênero.', S['body']))
+    story.append(Paragraph(
+        'A análise é executada em segundo plano no servidor. Após enviar, uma página de '
+        'status é exibida com um indicador de progresso e se atualiza automaticamente; ao '
+        'concluir, redireciona para a página de resultados. Táxons grandes (ex: Hexapoda, '
+        'Coleoptera) podem levar vários minutos — você pode deixar a aba aberta e a página '
+        'avança sozinha. Se algo falhar, o erro é exibido na página de status, sem '
+        'interromper a aplicação.', S['note']))
 
     story += [Paragraph('2.1  Os 15 Campos Avaliados', S['h2'])]
     story.append(Paragraph(
