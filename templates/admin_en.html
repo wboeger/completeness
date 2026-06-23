@@ -159,11 +159,21 @@
                     <td>{{ 'No (1st access pending)' if user.must_set_password else 'Yes' }}</td>
                     <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') if user.created_at else '—' }}</td>
                     <td>
-                        <form method="POST"
-                              action="{{ url_for('reset_password', user_id=user.id) }}"
-                              onsubmit="return confirm('Reset password for {{ user.username }}? The user will need to create a new password on next login.')">
-                            <button class="btn-reset" type="submit">Reset password</button>
-                        </form>
+                        <div style="display:flex; flex-wrap:wrap; gap:.4rem; align-items:center;">
+                            <form method="POST"
+                                  action="{{ url_for('reset_password', user_id=user.id) }}"
+                                  onsubmit="return confirm('Reset password for {{ user.username }}? The user will need to create a new password on next login.')">
+                                <button class="btn-reset" type="submit">Reset password</button>
+                            </form>
+                            <form method="POST"
+                                  action="{{ url_for('admin_set_user_password', user_id=user.id) }}"
+                                  style="display:flex; gap:.3rem; align-items:center;"
+                                  onsubmit="return confirm('Set a new password for {{ user.username }}?')">
+                                <input type="password" name="new_password" placeholder="New password" required minlength="6"
+                                       style="font-size:.85rem; padding:.25rem .4rem; border:1px solid #ccc; border-radius:4px; width:120px;">
+                                <button type="submit" style="background:#2980b9; color:white; border:none; padding:.3rem .7rem; border-radius:4px; font-weight:600; cursor:pointer; font-size:.82rem;">Set password</button>
+                            </form>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}

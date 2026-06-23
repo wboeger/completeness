@@ -1748,6 +1748,30 @@ def logout():
     flash('You have been logged out.', 'info')
     return redirect(url_for('login'))
 
+@app.route('/change_password', methods=['GET', 'POST'])
+def change_password():
+    """Self-service: a logged-in user changes their own password."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    if request.method == 'POST':
+        current  = request.form.get('current', '')
+        password = request.form.get('password', '')
+        confirm  = request.form.get('confirm', '')
+        if not user.check_password(current):
+            flash('Senha atual incorreta.', 'danger')
+        elif len(password) < 6:
+            flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
+        elif password != confirm:
+            flash('As senhas não coincidem.', 'danger')
+        else:
+            user.set_password(password)
+            db.session.commit()
+            flash('Senha alterada com sucesso.', 'success')
+            return redirect(url_for('index'))
+    return render_template(tmpl('change_password'),
+                           username=user.username, is_admin=user.is_admin)
+
 def is_taxon_authorized(requested_taxon, user_allowed_taxa):
     if not user_allowed_taxa: return False
     current_taxon = requested_taxon.strip().lower()
@@ -1970,6 +1994,22 @@ def reset_password(user_id):
     target.must_set_password = True
     db.session.commit()
     flash(f'Senha de "{target.username}" redefinida. O usuário deverá criar uma nova senha no próximo acesso.', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/set_user_password/<int:user_id>', methods=['POST'])
+def admin_set_user_password(user_id):
+    """Admin action: set a specific new password for a user directly (no first-access flow)."""
+    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+        flash('Acesso negado.', 'danger')
+        return redirect(url_for('index'))
+    target = User.query.get_or_404(user_id)
+    new_password = request.form.get('new_password', '')
+    if len(new_password) < 6:
+        flash(f'A senha de "{target.username}" deve ter pelo menos 6 caracteres.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    target.set_password(new_password)   # also clears must_set_password
+    db.session.commit()
+    flash(f'Senha de "{target.username}" definida com sucesso.', 'success')
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/bulk_add_users', methods=['GET', 'POST'])
