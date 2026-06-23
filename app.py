@@ -538,18 +538,27 @@ def run_db_migrations():
 
 import re as _re
 
-def _load_session_taxa(user):
-    """Populate session['allowed_taxa'] from pesquisadores sheet for the given user."""
-    if PESQUISADORES_DF is not None and 'login' in PESQUISADORES_DF.columns:
+def get_user_taxa(user):
+    """Return the lowercase taxa list authorised for a user, read from the in-memory
+    pesquisadores table. Computed per request rather than stored in the session cookie,
+    because a researcher may be assigned many taxa (phylum + class + dozens of families)
+    which would overflow the 4 KB browser cookie limit and silently drop the session."""
+    if user is not None and PESQUISADORES_DF is not None and 'login' in PESQUISADORES_DF.columns:
         row = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == user.username.lower()]
         if not row.empty and 'táxons' in PESQUISADORES_DF.columns:
             taxa_str = row.iloc[0]['táxons']
             if isinstance(taxa_str, str):
-                session['allowed_taxa'] = sorted(
+                return sorted(
                     t.strip().lower() for t in _re.split(r'[;,]', taxa_str) if t.strip()
                 )
-                return
-    session['allowed_taxa'] = []
+    return []
+
+def current_allowed_taxa():
+    """Authorised taxa for the currently logged-in user (empty if not logged in)."""
+    uid = session.get('user_id')
+    if not uid:
+        return []
+    return get_user_taxa(User.query.get(uid))
 
 # ── GBIF gap analysis ──────────────────────────────────────────────────────────
 GBIF_JOBS = {}   # job_id → dict with status/progress/result
@@ -1689,7 +1698,7 @@ def index():
                            username=user.username,
                            is_admin=user.is_admin,
                            data_loaded=DATA_LOADED_SUCCESSFULLY,
-                           allowed_taxa_list=session.get('allowed_taxa', []),
+                           allowed_taxa_list=current_allowed_taxa(),
                            data_dates=load_data_dates())
 
 @app.route('/manual')
@@ -1719,7 +1728,6 @@ def login():
             return redirect(url_for('set_password'))
         elif user.check_password(password):
             session['user_id'] = user.id
-            _load_session_taxa(user)
             flash('Login realizado com sucesso!', 'success')
             return redirect(url_for('index'))
         else:
@@ -1746,7 +1754,6 @@ def set_password():
             db.session.commit()
             session.pop('pending_user_id', None)
             session['user_id'] = user.id
-            _load_session_taxa(user)
             flash('Senha definida com sucesso! Bem-vindo(a).', 'success')
             return redirect(url_for('index'))
     return render_template(tmpl('set_password'), username=user.username)
@@ -2083,7 +2090,7 @@ def gbif_gap():
             flash('Informe um táxon.', 'danger')
             return redirect(url_for('gbif_gap'))
         # Authorization: same rule as the main analysis
-        allowed = session.get('allowed_taxa', [])
+        allowed = current_allowed_taxa()
         if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
             flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
             return redirect(url_for('gbif_gap'))
@@ -2098,7 +2105,7 @@ def gbif_gap():
         return redirect(url_for('gbif_gap_status', job_id=job_id))
     return render_template(tmpl('gbif_gap'),
                            username=user.username, is_admin=user.is_admin,
-                           allowed_taxa=session.get('allowed_taxa', []),
+                           allowed_taxa=current_allowed_taxa(),
                            data_loaded=DATA_LOADED_SUCCESSFULLY)
 
 @app.route('/gbif_gap/status/<job_id>')
@@ -2144,7 +2151,7 @@ def invasive_gap():
             flash('Informe um táxon.', 'danger')
             return redirect(url_for('invasive_gap'))
         # Authorization: same rule as the main analysis
-        allowed = session.get('allowed_taxa', [])
+        allowed = current_allowed_taxa()
         if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
             flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
             return redirect(url_for('invasive_gap'))
