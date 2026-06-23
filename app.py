@@ -1699,6 +1699,27 @@ _USING_POSTGRES = 'postgresql' in DATABASE_URL
 # SQLite stored inside the data/ volume mount persists across redeploys too.
 _DB_PERSISTENT = _USING_POSTGRES or os.path.dirname(_DEFAULT_DB_PATH) in DATABASE_URL
 ANALYSIS_RESULTS = {}   # result_id → {zip_path, summary}
+ANALYSIS_JOBS = {}      # job_id → {status, progress, pct, taxon_name, result_id, error}
+
+def _analysis_worker(job_id, taxon_input, category, pesq_df, plan_df):
+    """Run the Data Completeness analysis in a background thread so large taxa
+    (e.g. Hexapoda) do not block the request and trip the worker timeout."""
+    try:
+        ANALYSIS_JOBS[job_id].update(progress='Processando dados…', pct=15)
+        zip_path, summary, diag = run_python_analysis(
+            taxon_input, pesq_df, plan_df, category=category)
+        if zip_path and summary:
+            result_id = uuid.uuid4().hex
+            ANALYSIS_RESULTS[result_id] = {'zip_path': zip_path, 'summary': summary}
+            ANALYSIS_JOBS[job_id].update(status='done', pct=100,
+                                         progress='Concluído', result_id=result_id)
+        else:
+            ANALYSIS_JOBS[job_id].update(status='error',
+                                         error=diag or 'Falha na análise.')
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        ANALYSIS_JOBS[job_id].update(status='error', error=str(e))
 
 with app.app_context():
     load_data_on_startup()
@@ -1869,22 +1890,45 @@ def analyze_taxon():
         flash("Error: Application data is not loaded. Please restart the application service.", 'danger')
         return redirect(url_for('index'))
 
-    user = User.query.get(session['user_id'])
-    taxon_input = request.form['taxon'].strip()
+    taxon_input = request.form.get('taxon', '').strip()
     category = request.form.get('category', '').strip()
     if not taxon_input:
         flash("Taxon cannot be empty.", 'warning')
         return redirect(url_for('index'))
 
-    result_zip_path, summary, diag = run_python_analysis(taxon_input, PESQUISADORES_DF, PLANILHA_DF, category=category)
+    # Run in the background so large taxa don't trip the request/worker timeout.
+    job_id = uuid.uuid4().hex
+    ANALYSIS_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…',
+                             'pct': 0, 'taxon_name': taxon_input}
+    t = threading.Thread(target=_analysis_worker,
+                         args=(job_id, taxon_input, category,
+                               PESQUISADORES_DF, PLANILHA_DF.copy()),
+                         daemon=True)
+    t.start()
+    return redirect(url_for('analysis_status', job_id=job_id))
 
-    if result_zip_path and summary:
-        result_id = uuid.uuid4().hex
-        ANALYSIS_RESULTS[result_id] = {'zip_path': result_zip_path, 'summary': summary}
-        return redirect(url_for('analysis_result', result_id=result_id))
-    else:
-        flash(f"Analysis failed for '{taxon_input}': {diag}", 'danger')
+@app.route('/analysis/status/<job_id>')
+def analysis_status(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    job = ANALYSIS_JOBS.get(job_id)
+    if job is None:
+        flash('Análise não encontrada ou expirada.', 'danger')
         return redirect(url_for('index'))
+    # Once finished, hand off to the existing result page.
+    if job.get('status') == 'done' and job.get('result_id'):
+        return redirect(url_for('analysis_result', result_id=job['result_id']))
+    return render_template(tmpl('analysis_status'),
+                           job=job, job_id=job_id,
+                           username=user.username, is_admin=user.is_admin)
+
+@app.route('/analysis/poll/<job_id>')
+def analysis_poll(job_id):
+    """JSON endpoint polled by the analysis status page."""
+    from flask import jsonify
+    job = ANALYSIS_JOBS.get(job_id, {'status': 'not_found'})
+    return jsonify(job)
 
 @app.route('/result/<result_id>')
 def analysis_result(result_id):
