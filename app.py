@@ -1187,12 +1187,16 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
         if 'taxonid' in species_data.columns:
             species_data = species_data.drop_duplicates(subset='taxonid', keep='first')
 
-        # --- 15 manual fields (regras.txt Section 3) ---
+        # --- Manual fields (regras.txt Section 3) ---
+        # The first 15 follow ecological/trophic exclusion rules below; the last 4
+        # (controlledbibliography, countrycode, voucher, typology) are plain
+        # completeness fields — always applicable, no special rules.
         MANUAL_COLS = [
             "bibliographicreference", "country", "establishmentmeans", "endemicbrazil",
-            "environment", "locality", "epicontinentaldomain", "marinedomain",
+            "environment", "locationid", "epicontinentaldomain", "marinedomain",
             "lifeform", "habitat", "vernacularname", "vernacularnamelanguage",
             "vernacularnamelocality", "animalhostnames", "vegetalhostnames",
+            "controlledbibliography", "countrycode", "voucher", "typology",
         ]
         manual_present = [col for col in MANUAL_COLS if col in species_data.columns]
 
@@ -1355,7 +1359,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
             'establishmentmeans':      'origem',
             'endemicbrazil':           'endemica_brasil',
             'environment':             'ambiente',
-            'locality':                'localidade',
+            'locationid':              'localidade',
             'epicontinentaldomain':    'dominio_epicontinental',
             'marinedomain':            'dominio_marinho',
             'lifeform':                'forma_de_vida',
@@ -1365,6 +1369,10 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
             'vernacularnamelocality':  'localidade_nome_vernacular',
             'animalhostnames':         'hospedeiro_animal',
             'vegetalhostnames':        'hospedeiro_vegetal',
+            'controlledbibliography':  'bibliografia_controlada',
+            'countrycode':             'codigo_pais',
+            'voucher':                 'voucher',
+            'typology':                'tipologia',
         }
 
         _id_cols = [c for c in ['taxonid', 'family', 'genus', 'scientificname', 'taxonrank']
