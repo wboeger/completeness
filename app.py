@@ -1353,26 +1353,36 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
 
         unfilled_mask = applicable_mask & ~effective_filled
 
-        _FIELD_PT = {
-            'bibliographicreference':  'referencia_bibliografica',
-            'country':                 'pais',
-            'establishmentmeans':      'origem',
-            'endemicbrazil':           'endemica_brasil',
-            'environment':             'ambiente',
-            'locationid':              'localidade',
-            'epicontinentaldomain':    'dominio_epicontinental',
-            'marinedomain':            'dominio_marinho',
-            'lifeform':                'forma_de_vida',
+        # Output headers use the original Darwin Core term names (camelCase),
+        # matching the source CSV columns rather than Portuguese labels.
+        _FIELD_DWC = {
+            'bibliographicreference':  'bibliographicReference',
+            'country':                 'country',
+            'establishmentmeans':      'establishmentMeans',
+            'endemicbrazil':           'endemicBrazil',
+            'environment':             'environment',
+            'locationid':              'locationID',
+            'epicontinentaldomain':    'epicontinentalDomain',
+            'marinedomain':            'marineDomain',
+            'lifeform':                'lifeForm',
             'habitat':                 'habitat',
-            'vernacularname':          'nome_vernacular',
-            'vernacularnamelanguage':  'lingua_nome_vernacular',
-            'vernacularnamelocality':  'localidade_nome_vernacular',
-            'animalhostnames':         'hospedeiro_animal',
-            'vegetalhostnames':        'hospedeiro_vegetal',
-            'controlledbibliography':  'bibliografia_controlada',
-            'countrycode':             'codigo_pais',
+            'vernacularname':          'vernacularName',
+            'vernacularnamelanguage':  'vernacularNameLanguage',
+            'vernacularnamelocality':  'vernacularNameLocality',
+            'animalhostnames':         'animalHostNames',
+            'vegetalhostnames':        'vegetalHostNames',
+            'controlledbibliography':  'controlledBibliography',
+            'countrycode':             'countryCode',
             'voucher':                 'voucher',
-            'typology':                'tipologia',
+            'typology':                'typology',
+        }
+        # Darwin Core casing for the identifier columns carried into the export.
+        _ID_DWC = {
+            'taxonid':        'taxonID',
+            'family':         'family',
+            'genus':          'genus',
+            'scientificname': 'scientificName',
+            'taxonrank':      'taxonRank',
         }
 
         _id_cols = [c for c in ['taxonid', 'family', 'genus', 'scientificname', 'taxonrank']
@@ -1381,7 +1391,7 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
         missing_fields_df.insert(0, 'taxon_analisado', taxon_filter)
 
         for _col in manual_present:
-            missing_fields_df[_FIELD_PT.get(_col, _col)] = unfilled_mask[_col].map({True: 'faltante', False: ''})
+            missing_fields_df[_FIELD_DWC.get(_col, _col)] = unfilled_mask[_col].map({True: 'faltante', False: ''})
 
         # Combined host slot for parasites
         if (animal_in or vegetal_in) and is_parasite.any():
@@ -1391,13 +1401,15 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
                 _host_eff = effective_filled['animalhostnames']
             else:
                 _host_eff = effective_filled['vegetalhostnames']
-            missing_fields_df['hospedeiro_parasite'] = (is_parasite & ~_host_eff).map({True: 'faltante', False: ''})
+            missing_fields_df['parasiteHostNames'] = (is_parasite & ~_host_eff).map({True: 'faltante', False: ''})
 
         _field_cols = [c for c in missing_fields_df.columns if c not in _id_cols and c != 'taxon_analisado']
         missing_fields_df = missing_fields_df[missing_fields_df[_field_cols].eq('faltante').any(axis=1)]
         _sort_miss = [c for c in ['family', 'genus', 'scientificname'] if c in missing_fields_df.columns]
         if _sort_miss:
             missing_fields_df = missing_fields_df.sort_values(_sort_miss)
+        # Rename identifier columns to Darwin Core casing for the output file.
+        missing_fields_df = missing_fields_df.rename(columns=_ID_DWC)
 
         # --- Aggregation helpers ---
         def most_common_val(x):
@@ -1530,6 +1542,12 @@ def run_python_analysis(taxon_filter, pesquisadores_df, planilha_df, category=No
         if sort_sp:
             species_export = species_export.sort_values(sort_sp)
         species_export['completeness'] = species_export['completeness'].round(2)
+        # Darwin Core casing for identifier/rank columns in the export.
+        species_export = species_export.rename(columns={
+            'taxonid':        'taxonID',
+            'scientificname': 'scientificName',
+            'taxonrank':      'taxonRank',
+        })
 
         # --- Write files ---
         temp_dir = os.path.join(app.root_path, 'temp_analysis_output',
