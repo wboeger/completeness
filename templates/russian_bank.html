@@ -466,7 +466,7 @@ function renderPlayerZone(pid, cw, ch) {
   const wasteSlot = div('pile-slot');
   if (pl.waste.length > 0) {
     const top = pl.waste[pl.waste.length - 1];
-    const wc = cardEl({ ...top, faceUp: true }, 'waste-' + pid);
+    const wc = cardEl(top, 'waste-' + pid);  // pass original object to preserve === equality for selection highlight
     if (pl.waste.length > 1) {
       const badge = div('count-badge');
       badge.textContent = pl.waste.length;
@@ -483,10 +483,11 @@ function renderPlayerZone(pid, cw, ch) {
   foundRow.innerHTML = '';
   for (let i = 0; i < 4; i++) {
     const slot = div('pile-slot');
+    slot.dataset.id = `found-${pid}-${i}`;  // allows clicking empty slots to place Aces
     const pile = pl.foundPiles[i];
     if (pile.length > 0) {
       const top = pile[pile.length - 1];
-      const fc = cardEl({ ...top, faceUp: true }, `found-${pid}-${i}`);
+      const fc = cardEl(top, `found-${pid}-${i}`);  // pass original object
       if (pile.length > 1) {
         const badge = div('count-badge');
         badge.textContent = pile.length;
@@ -494,7 +495,7 @@ function renderPlayerZone(pid, cw, ch) {
       }
       slot.appendChild(fc);
     } else {
-      const lbl = div('slot-label'); lbl.textContent = '🂠';
+      const lbl = div('slot-label'); lbl.textContent = 'A';
       slot.appendChild(lbl);
     }
     foundRow.appendChild(slot);
