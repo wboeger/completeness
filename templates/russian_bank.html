@@ -5,286 +5,175 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Russian Bank</title>
+<title>Crapette</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root { --cw: 44px; --ch: 63px; }
 body {
   background: #1a6b2f;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  overflow: hidden;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  user-select: none;
+  overflow: hidden; height: 100dvh;
+  display: flex; flex-direction: column;
+  user-select: none; touch-action: manipulation;
 }
 
-/* ---- TOP BAR ---- */
+/* ── TOP BAR ── */
 #topbar {
-  background: rgba(0,0,0,0.4);
-  color: #fff;
-  font-size: 13px;
-  padding: 4px 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-shrink: 0;
+  background: rgba(0,0,0,0.45); color: #fff;
+  padding: 5px 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0; gap: 4px;
 }
-#topbar .turn-label { font-weight: 700; font-size: 14px; }
-#topbar button {
-  background: rgba(255,255,255,0.2);
-  border: 1px solid rgba(255,255,255,0.4);
-  color: #fff;
-  border-radius: 6px;
-  padding: 3px 8px;
-  font-size: 12px;
-  cursor: pointer;
+.pinfo { font-size: 11px; opacity: 0.85; min-width: 70px; }
+.pinfo.right { text-align: right; }
+#turn-label { font-weight: 700; font-size: 13px; text-align: center; flex: 1; }
+#btn-new {
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
+  color: #fff; border-radius: 5px; padding: 2px 8px; font-size: 11px; cursor: pointer;
 }
 
-/* ---- GAME AREA ---- */
+/* ── GAME AREA ── */
 #game {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  gap: 4px;
-  min-height: 0;
+  flex: 1; display: flex; flex-direction: column;
+  padding: 3px; gap: 3px; min-height: 0;
 }
 
-/* ---- PLAYER ZONES ---- */
-.player-zone {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  flex-shrink: 0;
+/* ── PLAYER STOCK ZONES ── */
+.stock-zone {
+  display: flex; gap: 6px; justify-content: center; flex-shrink: 0;
 }
-.player-zone.p2 { transform: rotate(180deg); }
+.stock-zone.p2 { transform: rotate(180deg); }
 
-.zone-row {
-  display: flex;
-  gap: 3px;
-  justify-content: center;
-  align-items: flex-start;
+/* ── FOUNDATIONS ── */
+#found-wrap {
+  background: rgba(0,0,0,0.18); border-radius: 7px;
+  padding: 4px 3px 3px; flex-shrink: 0;
 }
+#found-label {
+  font-size: 9px; color: rgba(255,255,255,0.5); letter-spacing: 1.5px;
+  text-align: center; margin-bottom: 3px;
+}
+#foundations { display: flex; gap: 3px; justify-content: center; }
 
-/* ---- TABLEAU ---- */
+/* ── TABLEAU ── */
 #tableau {
-  flex: 1;
-  display: flex;
-  gap: 3px;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 0;
-  padding: 2px 0;
+  flex: 1; display: flex; gap: 3px;
+  justify-content: center; align-items: flex-start;
+  min-height: 0; overflow: hidden;
+}
+.tab-col {
+  position: relative; width: var(--cw); flex-shrink: 0;
 }
 
-/* ---- CARDS ---- */
-.pile {
-  position: relative;
-  width: var(--cw, 44px);
-  height: var(--ch, 62px);
-  border-radius: 5px;
-  flex-shrink: 0;
+/* ── PILE SLOTS ── */
+.slot {
+  width: var(--cw); height: var(--ch);
+  border: 1.5px dashed rgba(255,255,255,0.22);
+  border-radius: 5px; position: relative; flex-shrink: 0;
+}
+.slot.hint {
+  border-color: #2ecc71; border-style: solid;
+  box-shadow: 0 0 6px #2ecc7188;
+}
+.slot-lbl {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.3); pointer-events: none;
 }
 
-.pile-slot {
-  width: var(--cw, 44px);
-  height: var(--ch, 62px);
-  border: 1.5px dashed rgba(255,255,255,0.3);
-  border-radius: 5px;
-  position: relative;
-  flex-shrink: 0;
-}
-.pile-slot .slot-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: rgba(255,255,255,0.4);
-  pointer-events: none;
-}
-
+/* ── CARDS ── */
 .card {
-  position: absolute;
-  width: var(--cw, 44px);
-  height: var(--ch, 62px);
-  border-radius: 5px;
-  border: 1px solid rgba(0,0,0,0.3);
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 2px 3px;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-  transition: box-shadow 0.1s, transform 0.1s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-  background: #fff;
+  position: absolute; width: var(--cw); height: var(--ch);
+  border-radius: 5px; border: 1px solid rgba(0,0,0,0.22);
+  cursor: pointer; background: #fff;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 2px 3px; font-weight: 700; line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: box-shadow 0.08s, transform 0.08s;
 }
 .card.red { color: #c0392b; }
 .card.black { color: #1a1a1a; }
-.card .rank { font-size: 12px; }
-.card .suit { font-size: 14px; align-self: flex-end; }
-.card.face-down {
-  background: repeating-linear-gradient(
-    45deg,
-    #1144aa,
-    #1144aa 4px,
-    #1a5fcc 4px,
-    #1a5fcc 8px
-  );
+.card .cr { font-size: 11px; }
+.card .cs { font-size: 13px; align-self: flex-end; }
+
+.card.back {
+  background: repeating-linear-gradient(45deg,#1144aa,#1144aa 4px,#1a5fcc 4px,#1a5fcc 8px);
   border: 2px solid #0d3380;
 }
-.card.face-down.p2back {
-  background: repeating-linear-gradient(
-    45deg,
-    #991111,
-    #991111 4px,
-    #cc2222 4px,
-    #cc2222 8px
-  );
+.card.back.p2 {
+  background: repeating-linear-gradient(45deg,#991111,#991111 4px,#cc2222 4px,#cc2222 8px);
   border: 2px solid #660000;
 }
-.card.selected {
-  box-shadow: 0 0 0 3px #f1c40f, 0 2px 6px rgba(0,0,0,0.5);
-  transform: translateY(-4px);
-  z-index: 50;
+.card.sel {
+  box-shadow: 0 0 0 3px #f1c40f, 0 3px 8px rgba(0,0,0,0.45);
+  transform: translateY(-4px); z-index: 50;
 }
-.card.hint { box-shadow: 0 0 0 2px #2ecc71, 0 2px 4px rgba(0,0,0,0.4); }
-
-/* Tableau stacking */
-.tab-pile {
-  position: relative;
-  width: var(--cw, 44px);
-  min-height: var(--ch, 62px);
-}
-.tab-pile .card { left: 0; }
-
-/* ---- MESSAGE OVERLAY ---- */
-#msg-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  z-index: 100;
-  align-items: center;
-  justify-content: center;
-}
-#msg-overlay.show { display: flex; }
-#msg-box {
-  background: #fff;
-  border-radius: 14px;
-  padding: 24px 28px;
-  text-align: center;
-  max-width: 280px;
-}
-#msg-box h2 { font-size: 22px; margin-bottom: 8px; }
-#msg-box p { font-size: 14px; color: #555; margin-bottom: 16px; }
-#msg-box button {
-  background: #1a6b2f;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 10px 24px;
-  font-size: 16px;
-  cursor: pointer;
+.card.hint {
+  box-shadow: 0 0 0 2px #2ecc71, 0 1px 3px rgba(0,0,0,0.3);
 }
 
-/* ---- PASS OVERLAY ---- */
-#pass-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.75);
-  z-index: 90;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 20px;
-}
-#pass-overlay.show { display: flex; }
-#pass-overlay .po-card {
-  background: #fff;
-  border-radius: 14px;
-  padding: 20px 30px;
-  text-align: center;
-}
-#pass-overlay h2 { font-size: 20px; margin-bottom: 6px; }
-#pass-overlay p { font-size: 13px; color: #555; }
-#pass-overlay button {
-  background: #1a6b2f;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 14px 36px;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: 0.5px;
+/* ── COUNT BADGE ── */
+.badge {
+  position: absolute; bottom: 2px; right: 3px;
+  background: rgba(0,0,0,0.5); color: #fff;
+  font-size: 9px; padding: 0 3px; border-radius: 3px;
+  pointer-events: none; z-index: 5; font-weight: 400;
 }
 
-/* ---- COUNT BADGES ---- */
-.count-badge {
-  position: absolute;
-  bottom: 2px;
-  right: 3px;
-  background: rgba(0,0,0,0.55);
-  color: #fff;
-  font-size: 9px;
-  padding: 0 3px;
-  border-radius: 3px;
-  pointer-events: none;
-  z-index: 5;
-}
-
-/* ---- ACTION ROW ---- */
+/* ── ACTION ROW ── */
 #action-row {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  padding: 2px 4px;
-  flex-shrink: 0;
+  display: flex; gap: 8px; padding: 2px 3px 4px; flex-shrink: 0;
 }
 #action-row button {
-  flex: 1;
-  max-width: 160px;
-  padding: 8px 0;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  flex: 1; padding: 10px 0; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
 }
 #btn-draw { background: #2980b9; color: #fff; }
 #btn-pass { background: #e74c3c; color: #fff; }
-#btn-draw:disabled { background: #7fb3d3; }
-#btn-pass:disabled { background: #f1948a; }
+#btn-draw:disabled { opacity: 0.45; }
+#btn-pass:disabled { opacity: 0.45; }
+
+/* ── OVERLAYS ── */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75); z-index: 100;
+  align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+}
+.overlay.show { display: flex; }
+.obox {
+  background: #fff; border-radius: 14px;
+  padding: 24px 30px; text-align: center; max-width: 290px;
+}
+.obox h2 { font-size: 22px; margin-bottom: 8px; }
+.obox p { font-size: 13px; color: #555; margin-bottom: 16px; }
+.obox button, .overlay > button {
+  background: #1a6b2f; color: #fff; border: none;
+  border-radius: 9px; padding: 12px 28px; font-size: 16px;
+  font-weight: 700; cursor: pointer;
+}
 </style>
 </head>
 <body>
+
 <div id="topbar">
-  <span id="p2-info">P2 — Bank: <span id="p2-bank-count">0</span> Waste: <span id="p2-waste-count">0</span></span>
-  <span id="turn-label" class="turn-label">P1's Turn</span>
-  <button onclick="newGame()">New</button>
+  <div class="pinfo">P1 🂠<span id="p1n">0</span> w<span id="p1w">0</span></div>
+  <div id="turn-label">Player 1's Turn</div>
+  <div class="pinfo right">P2 🂠<span id="p2n">0</span> w<span id="p2w">0</span></div>
+  <button id="btn-new" onclick="newGame()">New</button>
 </div>
 
 <div id="game">
-  <!-- P2 zone (rotated) -->
-  <div class="player-zone p2" id="p2-zone">
-    <div class="zone-row" id="p2-stock-row"></div>
-    <div class="zone-row" id="p2-found-row"></div>
+  <div class="stock-zone p2" id="p2-zone"></div>
+
+  <div id="found-wrap">
+    <div id="found-label">FOUNDATIONS</div>
+    <div id="foundations"></div>
   </div>
 
-  <!-- Tableau -->
   <div id="tableau"></div>
 
-  <!-- P1 zone -->
-  <div class="player-zone" id="p1-zone">
-    <div class="zone-row" id="p1-found-row"></div>
-    <div class="zone-row" id="p1-stock-row"></div>
-  </div>
+  <div class="stock-zone" id="p1-zone"></div>
 </div>
 
 <div id="action-row">
@@ -292,506 +181,333 @@ body {
   <button id="btn-pass" onclick="endTurn()">End Turn</button>
 </div>
 
-<div id="msg-overlay">
-  <div id="msg-box">
-    <h2 id="msg-title"></h2>
-    <p id="msg-body"></p>
+<div id="win-overlay" class="overlay">
+  <div class="obox">
+    <h2 id="win-title"></h2>
+    <p id="win-body"></p>
     <button onclick="newGame()">Play Again</button>
   </div>
 </div>
 
-<div id="pass-overlay">
-  <div class="po-card">
+<div id="pass-overlay" class="overlay">
+  <div class="obox">
     <h2 id="pass-title"></h2>
     <p id="pass-body"></p>
   </div>
-  <button onclick="confirmPass()">Tap to Start Turn</button>
+  <button onclick="confirmPass()">Tap to Start Your Turn</button>
 </div>
 
 <script>
-// ─────────────────────────────────────────────
-// CONSTANTS & STATE
-// ─────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────
 const SUITS = ['♠','♥','♦','♣'];
 const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-const RED_SUITS = new Set(['♥','♦']);
-const rankVal = r => RANKS.indexOf(r) + 1;
+const RED = new Set(['♥','♦']);
+const rv = r => RANKS.indexOf(r) + 1;
+const color = s => RED.has(s) ? 'red' : 'black';
 
-let state = {};
-let selected = null; // { source, idx, card }
-let pendingPassTo = null;
+let G = {};       // game state
+let sel = null;   // selected card: { src:'waste'|'tab', pid?, ci?, card }
+let nextTurn = null;
 
-function cardColor(suit) { return RED_SUITS.has(suit) ? 'red' : 'black'; }
-
-function makeDeck(backClass) {
+// ── Setup ────────────────────────────────────────────
+function makeDeck(bc) {
   const d = [];
-  for (const s of SUITS)
-    for (const r of RANKS)
-      d.push({ suit: s, rank: r, faceUp: false, backClass });
+  for (const s of SUITS) for (const r of RANKS) d.push({s,r,up:false,bc});
   return d;
 }
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
+function shuffle(a) {
+  for (let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}
+  return a;
 }
 
-// ─────────────────────────────────────────────
-// GAME SETUP
-// ─────────────────────────────────────────────
 function newGame() {
-  document.getElementById('msg-overlay').classList.remove('show');
+  document.getElementById('win-overlay').classList.remove('show');
   document.getElementById('pass-overlay').classList.remove('show');
-  selected = null;
-  pendingPassTo = null;
+  sel = null; nextTurn = null;
 
   const d1 = shuffle(makeDeck(''));
-  const d2 = shuffle(makeDeck('p2back'));
+  const d2 = shuffle(makeDeck('p2'));
 
-  // Each player: 13 cards to bank, 4 to tableau start, rest to hand
-  const p1Bank = d1.splice(0, 13);
-  const p1TabStart = d1.splice(0, 4).map(c => ({ ...c, faceUp: true }));
-  const p1Hand = d1; // remaining 35
+  // 13 to talon, 4 face-up to tableau, rest to hand
+  const t1 = d1.splice(0,13), tab1 = d1.splice(0,4).map(c=>({...c,up:true})), h1 = d1;
+  const t2 = d2.splice(0,13), tab2 = d2.splice(0,4).map(c=>({...c,up:true})), h2 = d2;
 
-  const p2Bank = d2.splice(0, 13);
-  const p2TabStart = d2.splice(0, 4).map(c => ({ ...c, faceUp: true }));
-  const p2Hand = d2;
-
-  // 8 tableau columns: [p1-0..3, p2-0..3]
-  const tableau = [
-    ...p1TabStart.map(c => [c]),
-    ...p2TabStart.map(c => [c]),
-  ];
-
-  state = {
+  G = {
     players: [
-      {
-        bank: p1Bank,       // face-down stock
-        waste: [],          // flip pile
-        hand: p1Hand,       // remaining cards to draw from after bank exhausted
-        found: [null, null, null, null], // 4 foundation piles [top card or null]
-        foundPiles: [[], [], [], []],
-        id: 0,
-        name: 'Player 1',
-        backClass: '',
-      },
-      {
-        bank: p2Bank,
-        waste: [],
-        hand: p2Hand,
-        found: [null, null, null, null],
-        foundPiles: [[], [], [], []],
-        id: 1,
-        name: 'Player 2',
-        backClass: 'p2back',
-      },
+      {talon:t1, waste:[], hand:h1, id:0, name:'Player 1', bc:''},
+      {talon:t2, waste:[], hand:h2, id:1, name:'Player 2', bc:'p2'},
     ],
-    tableau,   // array of 8 columns, each is array of cards (bottom to top)
-    turn: 0,   // 0 or 1
-    drawnThisTurn: false,
-    gameOver: false,
+    found: [[],[],[],[],[],[],[],[]],   // 8 SHARED foundations
+    tab:   [...tab1.map(c=>[c]), ...tab2.map(c=>[c])],  // 8 columns
+    turn: 0, over: false,
   };
-
   render();
 }
 
-// ─────────────────────────────────────────────
-// CARD SIZE (responsive)
-// ─────────────────────────────────────────────
-function setCardSize() {
+// ── Card sizing ───────────────────────────────────────
+function sizeCards() {
   const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  // We have 8 tableau columns + some padding
-  const maxW = Math.floor((vw - 10 - 7 * 3) / 8);
-  const cw = Math.max(36, Math.min(52, maxW));
-  const ch = Math.round(cw * 1.42);
-  document.documentElement.style.setProperty('--cw', cw + 'px');
-  document.documentElement.style.setProperty('--ch', ch + 'px');
-  return { cw, ch };
+  const cw = Math.max(33, Math.min(48, (vw - 6 - 7*3) / 8 | 0));
+  const ch = (cw * 1.43) | 0;
+  document.documentElement.style.setProperty('--cw', cw+'px');
+  document.documentElement.style.setProperty('--ch', ch+'px');
+  return ch;
 }
 
-// ─────────────────────────────────────────────
-// RENDER
-// ─────────────────────────────────────────────
+// ── Render ────────────────────────────────────────────
 function render() {
-  setCardSize();
-  const { cw, ch } = getCardSize();
-  const p = state.players;
+  const ch = sizeCards();
+  const [p0,p1] = G.players;
 
-  // topbar
-  document.getElementById('turn-label').textContent = p[state.turn].name + "'s Turn";
-  document.getElementById('p2-bank-count').textContent = p[1].bank.length;
-  document.getElementById('p2-waste-count').textContent = p[1].waste.length;
+  document.getElementById('turn-label').textContent = G.players[G.turn].name + "'s Turn";
+  document.getElementById('p1n').textContent = p0.talon.length;
+  document.getElementById('p1w').textContent = p0.waste.length;
+  document.getElementById('p2n').textContent = p1.talon.length;
+  document.getElementById('p2w').textContent = p1.waste.length;
 
-  // P1 info in action row area (bottom)
-  renderPlayerZone(0, cw, ch);
-  renderPlayerZone(1, cw, ch);
-  renderTableau(cw, ch);
-  updateButtons();
+  renderZone(0);
+  renderZone(1);
+  renderFound();
+  renderTab(ch);
+  updBtns();
 }
 
-function getCardSize() {
-  const vw = window.innerWidth;
-  const maxW = Math.floor((vw - 10 - 7 * 3) / 8);
-  const cw = Math.max(36, Math.min(52, maxW));
-  const ch = Math.round(cw * 1.42);
-  return { cw, ch };
-}
+function renderZone(pid) {
+  const pl = G.players[pid];
+  const zone = document.getElementById(pid===0 ? 'p1-zone' : 'p2-zone');
+  zone.innerHTML = '';
 
-function renderPlayerZone(pid, cw, ch) {
-  const pl = state.players[pid];
-  const stockRow = document.getElementById(`p${pid+1}-stock-row`);
-  const foundRow = document.getElementById(`p${pid+1}-found-row`);
-
-  // Stock row: bank + waste
-  stockRow.innerHTML = '';
-  // Bank
-  const bankSlot = div('pile-slot');
-  if (pl.bank.length > 0) {
-    const bc = cardEl({ faceUp: false, backClass: pl.backClass }, 'bank-' + pid);
-    const badge = div('count-badge');
-    badge.textContent = pl.bank.length;
-    bc.appendChild(badge);
-    bankSlot.appendChild(bc);
+  // Talon
+  const ts = mkSlot(); ts.dataset.id = 'talon-'+pid;
+  if (pl.talon.length > 0) {
+    const tc = mkCardEl({up:false,bc:pl.bc}, 'talon-'+pid);
+    const b = mkBadge(pl.talon.length); tc.appendChild(b); ts.appendChild(tc);
   } else {
-    const lbl = div('slot-label'); lbl.textContent = 'Bank';
-    bankSlot.appendChild(lbl);
+    ts.appendChild(mkLbl(''));
   }
-  stockRow.appendChild(bankSlot);
+  zone.appendChild(ts);
 
   // Waste
-  const wasteSlot = div('pile-slot');
+  const ws = mkSlot(); ws.dataset.id = 'waste-'+pid;
   if (pl.waste.length > 0) {
-    const top = pl.waste[pl.waste.length - 1];
-    const wc = cardEl(top, 'waste-' + pid);  // pass original object to preserve === equality for selection highlight
-    if (pl.waste.length > 1) {
-      const badge = div('count-badge');
-      badge.textContent = pl.waste.length;
-      wc.appendChild(badge);
-    }
-    wasteSlot.appendChild(wc);
+    const top = pl.waste[pl.waste.length-1];
+    const wc = mkCardEl(top, 'waste-'+pid);  // original ref for === selection check
+    if (pl.waste.length > 1) { const b = mkBadge(pl.waste.length); wc.appendChild(b); }
+    ws.appendChild(wc);
   } else {
-    const lbl = div('slot-label'); lbl.textContent = 'Waste';
-    wasteSlot.appendChild(lbl);
+    ws.appendChild(mkLbl('waste'));
   }
-  stockRow.appendChild(wasteSlot);
-
-  // Foundation row: 4 piles
-  foundRow.innerHTML = '';
-  for (let i = 0; i < 4; i++) {
-    const slot = div('pile-slot');
-    slot.dataset.id = `found-${pid}-${i}`;  // allows clicking empty slots to place Aces
-    const pile = pl.foundPiles[i];
-    if (pile.length > 0) {
-      const top = pile[pile.length - 1];
-      const fc = cardEl(top, `found-${pid}-${i}`);  // pass original object
-      if (pile.length > 1) {
-        const badge = div('count-badge');
-        badge.textContent = pile.length;
-        fc.appendChild(badge);
-      }
-      slot.appendChild(fc);
-    } else {
-      const lbl = div('slot-label'); lbl.textContent = 'A';
-      slot.appendChild(lbl);
-    }
-    foundRow.appendChild(slot);
-  }
+  zone.appendChild(ws);
 }
 
-function renderTableau(cw, ch) {
-  const tab = document.getElementById('tableau');
-  tab.innerHTML = '';
-  const overlap = Math.max(14, Math.round(ch * 0.28));
-
-  state.tableau.forEach((col, ci) => {
-    const colDiv = div('tab-pile');
-    const totalH = col.length === 0 ? ch : ch + (col.length - 1) * overlap;
-    colDiv.style.height = totalH + 'px';
-
-    if (col.length === 0) {
-      const slot = div('pile-slot');
-      slot.style.position = 'absolute';
-      const lbl = div('slot-label'); lbl.textContent = ci < 4 ? 'P1' : 'P2';
-      slot.appendChild(lbl);
-      slot.addEventListener('click', () => onEmptyTabClick(ci));
-      colDiv.appendChild(slot);
+function renderFound() {
+  const row = document.getElementById('foundations');
+  row.innerHTML = '';
+  G.found.forEach((pile, fi) => {
+    const slot = mkSlot(); slot.dataset.id = 'f-'+fi;
+    // Green hint: selected card can go here
+    if (sel && canGoFound(sel.card, fi)) slot.classList.add('hint');
+    if (pile.length > 0) {
+      const top = pile[pile.length-1];
+      const fc = mkCardEl(top, 'f-'+fi);  // original ref
+      if (pile.length > 1) { const b = mkBadge(pile.length); fc.appendChild(b); }
+      slot.appendChild(fc);
     } else {
-      col.forEach((card, ri) => {
-        const cel = cardEl(card, `tab-${ci}-${ri}`);
-        cel.style.top = (ri * overlap) + 'px';
-        // Only top card is interactive
-        if (ri === col.length - 1) {
-          cel.addEventListener('click', () => onTabCardClick(ci, ri));
-        } else {
-          cel.style.pointerEvents = 'none';
-        }
-        colDiv.appendChild(cel);
-      });
+      slot.appendChild(mkLbl('A'));
     }
-    tab.appendChild(colDiv);
+    row.appendChild(slot);
   });
 }
 
-function cardEl(card, id) {
-  const el = div('card');
-  if (id) el.dataset.id = id;
+function renderTab(ch) {
+  const tab = document.getElementById('tableau');
+  tab.innerHTML = '';
+  const ov = Math.max(13, (ch * 0.28) | 0);
 
-  if (!card.faceUp) {
-    el.classList.add('face-down');
-    if (card.backClass) el.classList.add(card.backClass);
+  G.tab.forEach((col, ci) => {
+    const col_div = document.createElement('div');
+    col_div.className = 'tab-col';
+    col_div.style.height = (col.length === 0 ? ch : ch + (col.length-1)*ov) + 'px';
+
+    if (col.length === 0) {
+      const s = mkSlot();
+      s.style.position = 'absolute';
+      if (sel && sel.card.r === 'K') s.classList.add('hint');
+      s.appendChild(mkLbl('K'));
+      s.addEventListener('click', () => onEmptyTab(ci));
+      col_div.appendChild(s);
+    } else {
+      col.forEach((card, ri) => {
+        const cel = mkCardEl(card, 'tab-'+ci+'-'+ri);
+        cel.style.top = (ri*ov)+'px';
+        if (ri === col.length-1) {
+          if (sel && canGoTab(sel.card, card)) cel.classList.add('hint');
+          cel.addEventListener('click', () => onTabCard(ci, ri));
+        } else {
+          cel.style.pointerEvents = 'none';
+        }
+        col_div.appendChild(cel);
+      });
+    }
+    tab.appendChild(col_div);
+  });
+}
+
+function mkCardEl(card, id) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  if (id) el.dataset.id = id;
+  if (!card.up) {
+    el.classList.add('back');
+    if (card.bc) el.classList.add(card.bc);
     return el;
   }
-
-  el.classList.add(cardColor(card.suit));
-
-  const top = div('rank'); top.textContent = card.rank;
-  const bot = div('suit'); bot.textContent = card.suit;
-  el.appendChild(top);
-  el.appendChild(bot);
-
-  // highlight selected
-  if (selected && selected.card === card) el.classList.add('selected');
-
+  el.classList.add(color(card.s));
+  const r = document.createElement('div'); r.className='cr'; r.textContent=card.r;
+  const s = document.createElement('div'); s.className='cs'; s.textContent=card.s;
+  el.appendChild(r); el.appendChild(s);
+  if (sel && sel.card === card) el.classList.add('sel');
   return el;
 }
+function mkSlot() { const d=document.createElement('div'); d.className='slot'; return d; }
+function mkLbl(t) { const d=document.createElement('div'); d.className='slot-lbl'; d.textContent=t; return d; }
+function mkBadge(n) { const d=document.createElement('div'); d.className='badge'; d.textContent=n; return d; }
 
-function div(cls) {
-  const d = document.createElement('div');
-  if (cls) d.className = cls;
-  return d;
+function updBtns() {
+  const pl = G.players[G.turn];
+  const canDraw = pl.talon.length > 0 || pl.hand.length > 0;
+  document.getElementById('btn-draw').disabled = !canDraw || G.over;
+  document.getElementById('btn-pass').disabled = G.over;
 }
 
-// ─────────────────────────────────────────────
-// BUTTON STATE
-// ─────────────────────────────────────────────
-function updateButtons() {
-  const pl = state.players[state.turn];
-  const canDraw = pl.bank.length > 0 || pl.hand.length > 0;
-  document.getElementById('btn-draw').disabled = state.drawnThisTurn || !canDraw || state.gameOver;
-  document.getElementById('btn-pass').disabled = state.gameOver;
+// ── Rules ────────────────────────────────────────────
+function canGoFound(card, fi) {
+  const pile = G.found[fi];
+  if (pile.length === 0) return card.r === 'A';
+  const top = pile[pile.length-1];
+  return card.s === top.s && rv(card.r) === rv(top.r)+1;
 }
 
-// ─────────────────────────────────────────────
-// CLICK HANDLERS
-// ─────────────────────────────────────────────
-function onTabCardClick(ci, ri) {
-  if (state.gameOver) return;
-  const col = state.tableau[ci];
+function canGoTab(card, target) {
+  if (!target || !target.up) return false;
+  return color(card.s) !== color(target.s) && rv(card.r) === rv(target.r)-1;
+}
+
+// ── Click handlers ────────────────────────────────────
+function onTalon(pid) { if (pid === G.turn) drawCard(); }
+
+function onWaste(pid) {
+  if (G.over || pid !== G.turn) return;
+  const pl = G.players[pid];
+  if (!pl.waste.length) return;
+  const card = pl.waste[pl.waste.length-1];
+  if (sel && sel.card === card) { sel=null; render(); return; }
+  sel = {src:'waste', pid, card};
+  render();
+}
+
+function onFound(fi) {
+  if (G.over || !sel) return;
+  if (canGoFound(sel.card, fi)) doMoveToFound(fi);
+}
+
+function onTabCard(ci, ri) {
+  if (G.over) return;
+  const col = G.tab[ci];
   const card = col[ri];
-  if (!card.faceUp) return;
+  if (!card.up) return;
 
-  if (!selected) {
-    // Select this card
-    selected = { source: 'tab', ci, ri, card };
-    render();
-    return;
+  // Tap same card → deselect
+  if (sel && sel.card === card) { sel=null; render(); return; }
+
+  // Something selected → try to move it here (target is top card)
+  if (sel && ri === col.length-1 && canGoTab(sel.card, card)) {
+    doMoveToTab(ci); return;
   }
 
-  // Attempt move: selected -> this tableau column top
-  if (selected.source === 'tab' && selected.ci === ci) {
-    // deselect
-    selected = null;
-    render();
-    return;
-  }
-
-  // Try to place selected onto this column (must go on top, which is ri)
-  if (ri === col.length - 1) {
-    // Try as foundation first? No — tableau click goes to tableau
-    if (canPlaceOnTab(selected.card, card)) {
-      moveSelectedToTab(ci);
-      return;
-    }
-  }
-
-  // Maybe user wants to select this card instead
-  selected = { source: 'tab', ci, ri, card };
+  // Select this card (both players can pick from any tableau top)
+  sel = {src:'tab', ci, ri, card};
   render();
 }
 
-function onEmptyTabClick(ci) {
-  if (!selected) return;
-  // Only Kings can go on empty tableau
-  if (selected.card.rank === 'K') {
-    moveSelectedToTab(ci);
-  }
+function onEmptyTab(ci) {
+  if (!sel || sel.card.r !== 'K') return;
+  doMoveToTab(ci);
 }
 
-function onWasteClick(pid) {
-  if (state.gameOver) return;
-  if (pid !== state.turn) return; // can only use own waste
-  const pl = state.players[pid];
-  if (pl.waste.length === 0) return;
-  const card = pl.waste[pl.waste.length - 1];
-
-  if (!selected) {
-    selected = { source: 'waste', pid, card };
-    render();
-    return;
-  }
-
-  // If something selected, try placing waste card as target? No. Waste card isn't a target.
-  // Deselect or switch selection
-  selected = { source: 'waste', pid, card };
-  render();
-}
-
-function onFoundClick(pid, fi) {
-  if (state.gameOver) return;
-  // Foundation is only a target
-  if (!selected) return;
-  if (canPlaceOnFound(selected.card, pid, fi)) {
-    moveSelectedToFound(pid, fi);
-  }
-}
-
-function onBankClick(pid) {
-  // Clicking bank = draw (only current player's bank)
-  if (pid === state.turn) drawCard();
-}
-
-// Wire up click events after render
-// We use event delegation on the game div
+// Event delegation on #game
 document.getElementById('game').addEventListener('click', e => {
-  const id = e.target.closest('[data-id]')?.dataset?.id;
-  if (!id) return;
-  const parts = id.split('-');
-  const type = parts[0];
-
-  if (type === 'bank') onBankClick(+parts[1]);
-  else if (type === 'waste') onWasteClick(+parts[1]);
-  else if (type === 'found') onFoundClick(+parts[1], +parts[2]);
-  // tab clicks handled inline
+  const el = e.target.closest('[data-id]');
+  if (!el) return;
+  const [type, ...rest] = el.dataset.id.split('-');
+  if (type === 'talon') onTalon(+rest[0]);
+  else if (type === 'waste') onWaste(+rest[0]);
+  else if (type === 'f') onFound(+rest[0]);
+  // tab clicks wired inline in renderTab
 });
 
-// ─────────────────────────────────────────────
-// DRAW CARD
-// ─────────────────────────────────────────────
+// ── Draw ─────────────────────────────────────────────
 function drawCard() {
-  if (state.gameOver) return;
-  const pl = state.players[state.turn];
-  if (state.drawnThisTurn) return;
-
-  let card = null;
-  if (pl.bank.length > 0) {
-    card = pl.bank.pop();
-  } else if (pl.hand.length > 0) {
-    card = pl.hand.pop();
-  } else {
-    return;
-  }
-  card.faceUp = true;
+  if (G.over) return;
+  const pl = G.players[G.turn];
+  let card = pl.talon.length ? pl.talon.pop() : pl.hand.length ? pl.hand.pop() : null;
+  if (!card) return;
+  card.up = true;
   pl.waste.push(card);
-  state.drawnThisTurn = true;
-
-  // Auto-select the drawn card
-  selected = { source: 'waste', pid: state.turn, card };
+  sel = {src:'waste', pid:G.turn, card};
   render();
 }
 
-// ─────────────────────────────────────────────
-// MOVE LOGIC
-// ─────────────────────────────────────────────
-function canPlaceOnTab(card, target) {
-  // Target must be face-up, card must be opposite color, one rank lower
-  if (!target.faceUp) return false;
-  return cardColor(card.suit) !== cardColor(target.suit) &&
-         rankVal(card.rank) === rankVal(target.rank) - 1;
+// ── Moves ─────────────────────────────────────────────
+function removeSel() {
+  if (sel.src === 'waste') G.players[sel.pid].waste.pop();
+  else G.tab[sel.ci].pop();
 }
 
-function canPlaceOnFound(card, pid, fi) {
-  const pile = state.players[pid].foundPiles[fi];
-  if (pile.length === 0) {
-    return card.rank === 'A';
-  }
-  const top = pile[pile.length - 1];
-  return card.suit === top.suit && rankVal(card.rank) === rankVal(top.rank) + 1;
+function doMoveToFound(fi) {
+  const card = sel.card; removeSel();
+  card.up = true; G.found[fi].push(card);
+  sel = null; checkWin(); render();
 }
 
-function removeSelected() {
-  if (selected.source === 'waste') {
-    const pl = state.players[selected.pid];
-    pl.waste.pop();
-  } else if (selected.source === 'tab') {
-    state.tableau[selected.ci].pop();
-  }
+function doMoveToTab(ci) {
+  const card = sel.card; removeSel();
+  card.up = true; G.tab[ci].push(card);
+  sel = null; checkWin(); render();
 }
 
-function moveSelectedToTab(ci) {
-  const card = selected.card;
-  removeSelected();
-  card.faceUp = true;
-  state.tableau[ci].push(card);
-  selected = null;
-  checkWin();
-  render();
-}
-
-function moveSelectedToFound(pid, fi) {
-  const card = selected.card;
-  removeSelected();
-  card.faceUp = true;
-  state.players[pid].foundPiles[fi].push(card);
-  selected = null;
-  // After placing on foundation, keep turn going (no draw needed)
-  // reset drawnThisTurn only if placing from waste and had drawn
-  checkWin();
-  render();
-}
-
-// ─────────────────────────────────────────────
-// END TURN / PASS
-// ─────────────────────────────────────────────
+// ── Turn ─────────────────────────────────────────────
 function endTurn() {
-  if (state.gameOver) return;
-  selected = null;
-  const nextPid = 1 - state.turn;
-  pendingPassTo = nextPid;
-
-  const overlay = document.getElementById('pass-overlay');
-  document.getElementById('pass-title').textContent = state.players[nextPid].name + "'s Turn";
-  document.getElementById('pass-body').textContent = 'Hand the phone to ' + state.players[nextPid].name;
-  overlay.classList.add('show');
+  if (G.over) return;
+  sel = null;
+  const next = 1 - G.turn;
+  nextTurn = next;
+  document.getElementById('pass-title').textContent = G.players[next].name + "'s Turn";
+  document.getElementById('pass-body').textContent = 'Pass the phone to ' + G.players[next].name;
+  document.getElementById('pass-overlay').classList.add('show');
 }
 
 function confirmPass() {
   document.getElementById('pass-overlay').classList.remove('show');
-  state.turn = pendingPassTo;
-  state.drawnThisTurn = false;
-  pendingPassTo = null;
+  G.turn = nextTurn; nextTurn = null;
   render();
 }
 
-// ─────────────────────────────────────────────
-// WIN CHECK
-// ─────────────────────────────────────────────
+// ── Win ───────────────────────────────────────────────
 function checkWin() {
-  for (const pl of state.players) {
-    if (pl.bank.length === 0 && pl.waste.length === 0 && pl.hand.length === 0) {
-      state.gameOver = true;
-      setTimeout(() => showWin(pl.name), 100);
+  for (const pl of G.players) {
+    if (!pl.talon.length && !pl.waste.length && !pl.hand.length) {
+      G.over = true;
+      setTimeout(() => {
+        document.getElementById('win-title').textContent = pl.name + ' Wins!';
+        document.getElementById('win-body').textContent = pl.name + ' played out all their cards!';
+        document.getElementById('win-overlay').classList.add('show');
+      }, 150);
     }
   }
 }
 
-function showWin(name) {
-  document.getElementById('msg-title').textContent = name + ' Wins!';
-  document.getElementById('msg-body').textContent = name + ' emptied their stock pile first!';
-  document.getElementById('msg-overlay').classList.add('show');
-}
-
-// ─────────────────────────────────────────────
-// RESPONSIVE
-// ─────────────────────────────────────────────
 window.addEventListener('resize', () => render());
-
-// ─────────────────────────────────────────────
-// START
-// ─────────────────────────────────────────────
 newGame();
 </script>
 </body>
