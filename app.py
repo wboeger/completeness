@@ -1774,6 +1774,11 @@ def set_lang(code):
     return redirect(request.referrer or url_for('index'))
 
 
+@app.route('/russian-bank')
+def russian_bank():
+    return render_template('russian_bank.html')
+
+
 @app.route('/')
 def index():
     if 'user_id' not in session: return redirect(url_for('login'))
