@@ -195,6 +195,12 @@ FAUNA_API_URL = os.environ.get(
 )
 FAUNA_PAGE_SIZE = int(os.environ.get('FAUNA_PAGE_SIZE', '5000'))
 
+# Contributor report (one row per user, with taxa they edited and access totals).
+CONTRIB_REPORT_URL = os.environ.get(
+    'CONTRIB_REPORT_URL',
+    'https://fauna.jbrj.gov.br/csv/mv_relatorio_contribuicao_usuarios'
+)
+
 def download_fauna_csv(dest_path):
     """Download the full Catalogo Taxonomico da Fauna do Brasil dataset from the
     JBRJ PostgREST API and write it to dest_path as 'planilha_extendida.csv'.
@@ -563,6 +569,8 @@ def current_allowed_taxa():
 # ── GBIF gap analysis ──────────────────────────────────────────────────────────
 GBIF_JOBS = {}   # job_id → dict with status/progress/result
 INVASIVE_JOBS = {} # job_id → dict with status/progress/result
+AUTHORS_JOBS = {}  # job_id → dict with status/progress/result
+CONTRIB_JOBS = {}  # job_id → dict with status/progress/result
 
 def _gbif_gap_worker(job_id, taxon_name, planilha_df):
     def update(progress, pct=None):
@@ -951,6 +959,315 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
 
     except Exception as e:
         INVASIVE_JOBS[job_id].update(status='error', error=str(e))
+
+def _authors_worker(job_id, taxon_name, category, planilha_df):
+    """List every author (scientificNameAuthorship) of the requested taxon and all
+    its subordinate taxa, plus modification statistics: first/last access date,
+    number of changes in the last 1/2/5/10 years, and the total access count.
+    The 'modified' column (Darwin Core) is used as the record-access timestamp."""
+    def update(progress, pct=None):
+        AUTHORS_JOBS[job_id]['progress'] = progress
+        if pct is not None:
+            AUTHORS_JOBS[job_id]['pct'] = pct
+
+    try:
+        AUTHORS_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                                'result_path': None, 'error': None, 'taxon_name': taxon_name}
+
+        update('Filtrando táxons subordinados…', 15)
+        df = planilha_df  # already a defensive copy from the caller
+
+        RANK_HIERARCHY = [
+            'phylum', 'superclass', 'class', 'subclass', 'infraclass',
+            'superorder', 'order', 'suborder', 'infraorder',
+            'superfamily', 'family', 'subfamily', 'tribe', 'subtribe',
+            'genus', 'subgenus',
+        ]
+        category = (category or '').strip().lower() or None
+        if category and category not in df.columns:
+            category = None
+        ranks_to_search = [category] if category else RANK_HIERARCHY
+
+        # Match the taxon in any (or the chosen) rank column. A row whose rank column
+        # equals the taxon is either the taxon itself or one of its subordinates, so
+        # the matched set already includes the taxon "and this one".
+        if taxon_name and taxon_name.lower() == 'animalia' and not category:
+            sub = df.copy()
+        else:
+            mask = pd.Series(False, index=df.index)
+            for rank in ranks_to_search:
+                if rank in df.columns:
+                    mask |= (df[rank].astype(str).str.lower().str.strip() == taxon_name.lower())
+            sub = df[mask].copy()
+
+        if sub.empty:
+            AUTHORS_JOBS[job_id].update(
+                status='error',
+                error=f'Nenhum táxon encontrado para "{taxon_name}".')
+            return
+
+        # ── Authors (scientificNameAuthorship) ──
+        update('Compilando autores…', 50)
+        author_col = 'scientificnameauthorship'
+        if author_col in sub.columns:
+            auth = sub[author_col]
+            auth = auth[auth.notna()].astype(str).str.strip()
+            auth = auth[auth.ne('') & ~auth.str.lower().isin(['nan', 'none'])]
+            author_counts = (auth.value_counts()
+                                 .rename_axis('scientificNameAuthorship')
+                                 .reset_index(name='n_taxa'))
+        else:
+            author_counts = pd.DataFrame(columns=['scientificNameAuthorship', 'n_taxa'])
+
+        # ── Access / change dates (modified column) ──
+        update('Calculando datas de acesso…', 70)
+        if 'modified' in sub.columns:
+            mod = pd.to_datetime(sub['modified'], errors='coerce').dropna()
+        else:
+            mod = pd.Series([], dtype='datetime64[ns]')
+
+        now = pd.Timestamp.now()
+
+        def changes_since(years):
+            if mod.empty:
+                return 0
+            return int((mod >= (now - pd.DateOffset(years=years))).sum())
+
+        first_access = mod.min().strftime('%Y-%m-%d') if not mod.empty else '—'
+        last_access  = mod.max().strftime('%Y-%m-%d') if not mod.empty else '—'
+        n_chg_1, n_chg_2, n_chg_5, n_chg_10 = (changes_since(1), changes_since(2),
+                                               changes_since(5), changes_since(10))
+        total_access = int(len(mod))
+
+        # ── Detail sheet: one row per taxon with author + access date ──
+        detail_cols = [c for c in ['taxonid', 'scientificname', 'taxonrank', 'family',
+                                    'genus', 'scientificnameauthorship', 'modified']
+                       if c in sub.columns]
+        detail = sub[detail_cols].copy().rename(columns={
+            'taxonid': 'taxonID', 'scientificname': 'scientificName',
+            'taxonrank': 'taxonRank',
+            'scientificnameauthorship': 'scientificNameAuthorship',
+            'modified': 'modified',
+        })
+
+        # ── Summary sheet ──
+        summary_df = pd.DataFrame([
+            ('Táxon analisado', taxon_name),
+            ('Táxons (este e subordinados)', int(len(sub))),
+            ('Autores distintos', int(len(author_counts))),
+            ('Primeiro acesso', first_access),
+            ('Último acesso', last_access),
+            ('Alterações no último 1 ano', n_chg_1),
+            ('Alterações nos últimos 2 anos', n_chg_2),
+            ('Alterações nos últimos 5 anos', n_chg_5),
+            ('Alterações nos últimos 10 anos', n_chg_10),
+            ('Total de acessos (registros com data)', total_access),
+        ], columns=['Métrica', 'Valor'])
+
+        # ── Write XLSX + ZIP ──
+        update('Gerando arquivo XLSX…', 90)
+        result_path = os.path.join('/tmp', f'authors_{job_id}.xlsx')
+        with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
+            summary_df.to_excel(writer, sheet_name='Resumo', index=False)
+            author_counts.to_excel(writer, sheet_name='Autores', index=False)
+            detail.to_excel(writer, sheet_name='Taxa', index=False)
+
+        zip_path = os.path.join('/tmp', f'authors_{job_id}.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(result_path, f'authors_{job_id[:8]}.xlsx')
+            if os.path.exists('manual_pt.pdf'):
+                zf.write('manual_pt.pdf', 'manual_pt.pdf')
+            if os.path.exists('manual_en.pdf'):
+                zf.write('manual_en.pdf', 'manual_en.pdf')
+
+        AUTHORS_JOBS[job_id].update(
+            status='done', pct=100, progress='Concluído.',
+            result_path=zip_path, taxon_name=taxon_name,
+            n_taxa=int(len(sub)), n_authors=int(len(author_counts)),
+            first_access=first_access, last_access=last_access,
+            n_chg_1=n_chg_1, n_chg_2=n_chg_2, n_chg_5=n_chg_5, n_chg_10=n_chg_10,
+            total_access=total_access,
+        )
+
+    except Exception as e:
+        AUTHORS_JOBS[job_id].update(status='error', error=str(e))
+
+def _contrib_worker(job_id, taxon_name, category, planilha_df):
+    """List the contributors (nome_completo) who edited the requested taxon or any
+    of its subordinate taxa, with their total_geral and last-year access counts.
+
+    Source: the JBRJ contributor report CSV (one row per user). That report ties
+    each user to the phyla/classes/families they edited (filos_alterados,
+    classes_alteradas, familias_alteradas). Order is not a report column, but it is
+    derived from each matched family via the CTFB hierarchy; genus is not available."""
+    def update(progress, pct=None):
+        CONTRIB_JOBS[job_id]['progress'] = progress
+        if pct is not None:
+            CONTRIB_JOBS[job_id]['pct'] = pct
+
+    try:
+        CONTRIB_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                                'result_path': None, 'error': None, 'taxon_name': taxon_name}
+
+        # ── Phase 1: which phylum/class/family names live under the taxon ──
+        update('Resolvendo táxons subordinados…', 10)
+        df = planilha_df
+        RANK_HIERARCHY = [
+            'phylum', 'superclass', 'class', 'subclass', 'infraclass',
+            'superorder', 'order', 'suborder', 'infraorder',
+            'superfamily', 'family', 'subfamily', 'tribe', 'subtribe',
+            'genus', 'subgenus',
+        ]
+        category = (category or '').strip().lower() or None
+        if category and category not in df.columns:
+            category = None
+        ranks_to_search = [category] if category else RANK_HIERARCHY
+
+        include_all = bool(taxon_name) and taxon_name.lower() == 'animalia' and not category
+        if include_all:
+            sub = df
+        else:
+            mask = pd.Series(False, index=df.index)
+            for rank in ranks_to_search:
+                if rank in df.columns:
+                    mask |= (df[rank].astype(str).str.lower().str.strip() == taxon_name.lower())
+            sub = df[mask]
+
+        if not include_all and sub.empty:
+            CONTRIB_JOBS[job_id].update(
+                status='error', error=f'Nenhum táxon encontrado para "{taxon_name}".')
+            return
+
+        # Rank of the requested taxon → only collect names at that rank or finer so we
+        # don't drag in ancestor phyla/classes (e.g. Mammalia must not pull Chordata).
+        taxon_rank_idx = -1
+        if not include_all:
+            for col in ([category] if category else []) + RANK_HIERARCHY:
+                if col in sub.columns and (sub[col].astype(str).str.lower().str.strip()
+                                           == taxon_name.lower()).any():
+                    taxon_rank_idx = RANK_HIERARCHY.index(col)
+                    break
+
+        # The contributor report only knows phylum/class/family.
+        REPORT_LEVELS = ['phylum', 'class', 'family']
+        valid_names = {lvl: set() for lvl in REPORT_LEVELS}
+        for lvl in REPORT_LEVELS:
+            if lvl not in sub.columns:
+                continue
+            if not include_all and RANK_HIERARCHY.index(lvl) < taxon_rank_idx:
+                continue  # ancestor level — skip to avoid over-matching
+            vals = (sub[lvl].dropna().astype(str).str.strip())
+            valid_names[lvl] |= {v.lower() for v in vals if v and v.lower() != 'nan'}
+
+        all_valid = valid_names['phylum'] | valid_names['class'] | valid_names['family']
+        if not include_all and not all_valid:
+            CONTRIB_JOBS[job_id].update(
+                status='error',
+                error=(f'O táxon "{taxon_name}" não possui filo/classe/família '
+                       'correspondente no relatório de contribuição.'))
+            return
+
+        # ── Phase 2: download the contributor report ──
+        update('Baixando relatório de contribuição…', 35)
+        from io import BytesIO
+        resp = requests.get(CONTRIB_REPORT_URL, timeout=120)
+        resp.raise_for_status()
+        rep = pd.read_csv(BytesIO(resp.content))
+        rep.columns = [c.strip().lower() for c in rep.columns]
+
+        col_phylum = 'filos_alterados'
+        col_class  = 'classes_alteradas'
+        col_family = 'familias_alteradas'
+
+        def tokens(cell):
+            if pd.isna(cell):
+                return set()
+            return {t.strip().lower() for t in str(cell).split(',') if t.strip()}
+
+        # family → order map (order is not in the report, derive it from the CTFB
+        # hierarchy so contributors can also be attributed at order level).
+        fam2order = {}
+        if 'family' in df.columns and 'order' in df.columns:
+            _pairs = df[['family', 'order']].dropna()
+            for _fam, _ord in zip(_pairs['family'].astype(str).str.strip(),
+                                  _pairs['order'].astype(str).str.strip()):
+                if _fam and _ord and _ord.lower() != 'nan':
+                    fam2order.setdefault(_fam.lower(), _ord)
+
+        def orders_for(fam_set):
+            return sorted({fam2order[f] for f in fam_set if f in fam2order})
+
+        # ── Phase 3: match contributors to the taxon subtree ──
+        update('Selecionando contribuidores…', 60)
+        matched_rows = []
+        for _, r in rep.iterrows():
+            if include_all:
+                hit_f = tokens(r.get(col_family))
+                tox = (tokens(r.get(col_phylum)) | tokens(r.get(col_class)) | hit_f)
+                if not tox:
+                    continue
+            else:
+                hit_p = tokens(r.get(col_phylum)) & valid_names['phylum']
+                hit_c = tokens(r.get(col_class))  & valid_names['class']
+                hit_f = tokens(r.get(col_family)) & valid_names['family']
+                tox = hit_p | hit_c | hit_f
+                if not tox:
+                    continue
+            matched_rows.append({
+                'nome_completo':       r.get('nome_completo'),
+                'login':               r.get('login'),
+                'email':               r.get('email'),
+                'total_geral':         r.get('total_geral'),
+                'acessos_ultimo_ano':  r.get('total_12_meses'),
+                'taxa_correspondentes': ', '.join(sorted({t.title() for t in tox})),
+                'ordens_correspondentes': ', '.join(orders_for(hit_f)),
+            })
+
+        contrib = pd.DataFrame(matched_rows, columns=[
+            'nome_completo', 'login', 'email', 'total_geral',
+            'acessos_ultimo_ano', 'taxa_correspondentes', 'ordens_correspondentes'])
+        for c in ['total_geral', 'acessos_ultimo_ano']:
+            contrib[c] = pd.to_numeric(contrib[c], errors='coerce').fillna(0).astype(int)
+        contrib = contrib.sort_values(['total_geral', 'nome_completo'],
+                                      ascending=[False, True]).reset_index(drop=True)
+
+        if contrib.empty:
+            CONTRIB_JOBS[job_id].update(
+                status='error',
+                error=f'Nenhum contribuidor encontrado para "{taxon_name}".')
+            return
+
+        # ── Phase 4: write XLSX + ZIP ──
+        update('Gerando arquivo XLSX…', 90)
+        result_path = os.path.join('/tmp', f'contrib_{job_id}.xlsx')
+        summary_df = pd.DataFrame([
+            ('Táxon analisado', taxon_name),
+            ('Contribuidores', int(len(contrib))),
+            ('total_geral (soma)', int(contrib['total_geral'].sum())),
+            ('Acessos no último ano (soma)', int(contrib['acessos_ultimo_ano'].sum())),
+        ], columns=['Métrica', 'Valor'])
+        with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
+            summary_df.to_excel(writer, sheet_name='Resumo', index=False)
+            contrib.to_excel(writer, sheet_name='Contribuidores', index=False)
+
+        zip_path = os.path.join('/tmp', f'contrib_{job_id}.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(result_path, f'contrib_{job_id[:8]}.xlsx')
+            if os.path.exists('manual_pt.pdf'):
+                zf.write('manual_pt.pdf', 'manual_pt.pdf')
+            if os.path.exists('manual_en.pdf'):
+                zf.write('manual_en.pdf', 'manual_en.pdf')
+
+        CONTRIB_JOBS[job_id].update(
+            status='done', pct=100, progress='Concluído.',
+            result_path=zip_path, taxon_name=taxon_name,
+            n_contrib=int(len(contrib)),
+            sum_total_geral=int(contrib['total_geral'].sum()),
+            sum_last_year=int(contrib['acessos_ultimo_ano'].sum()),
+        )
+
+    except Exception as e:
+        CONTRIB_JOBS[job_id].update(status='error', error=str(e))
 
 def generate_completeness_chart(dataframe, category_column, title_label, sort_cols, output_path):
     """
@@ -2305,6 +2622,124 @@ def invasive_gap_download(job_id):
 def invasive_gap_poll(job_id):
     from flask import jsonify
     job = INVASIVE_JOBS.get(job_id, {'status': 'not_found'})
+    return jsonify({k: v for k, v in job.items() if k != 'result_path'})
+
+@app.route('/authors', methods=['GET', 'POST'])
+def authors_analysis():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if request.method != 'POST':
+        return redirect(url_for('index'))
+    user = User.query.get(session['user_id'])
+    taxon_name = request.form.get('taxon', '').strip()
+    category = request.form.get('category', '').strip()
+    if not taxon_name:
+        flash('Informe um táxon.', 'danger')
+        return redirect(url_for('index'))
+    allowed = current_allowed_taxa()
+    if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
+        flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
+        return redirect(url_for('index'))
+    if PLANILHA_DF is None:
+        flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
+        return redirect(url_for('index'))
+    job_id = uuid.uuid4().hex
+    AUTHORS_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                            'result_path': None, 'error': None, 'taxon_name': taxon_name}
+    t = threading.Thread(target=_authors_worker,
+                         args=(job_id, taxon_name, category, PLANILHA_DF.copy()),
+                         daemon=True)
+    t.start()
+    return redirect(url_for('authors_status', job_id=job_id))
+
+@app.route('/authors/status/<job_id>')
+def authors_status(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    job = AUTHORS_JOBS.get(job_id)
+    if job is None:
+        flash('Job não encontrado.', 'danger')
+        return redirect(url_for('index'))
+    return render_template(tmpl('authors_status'),
+                           job=job, job_id=job_id,
+                           username=user.username, is_admin=user.is_admin)
+
+@app.route('/authors/download/<job_id>')
+def authors_download(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    job = AUTHORS_JOBS.get(job_id)
+    if not job or job['status'] != 'done' or not job.get('result_path'):
+        flash('Resultado não disponível.', 'danger')
+        return redirect(url_for('index'))
+    taxon_safe = (job.get('taxon_name') or 'taxon').replace(' ', '_').replace('/', '-')
+    return send_file(job['result_path'], as_attachment=True,
+                     download_name=f'authors_{taxon_safe}.zip')
+
+@app.route('/authors/poll/<job_id>')
+def authors_poll(job_id):
+    from flask import jsonify
+    job = AUTHORS_JOBS.get(job_id, {'status': 'not_found'})
+    return jsonify({k: v for k, v in job.items() if k != 'result_path'})
+
+@app.route('/contrib', methods=['GET', 'POST'])
+def contrib_analysis():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if request.method != 'POST':
+        return redirect(url_for('index'))
+    user = User.query.get(session['user_id'])
+    taxon_name = request.form.get('taxon', '').strip()
+    category = request.form.get('category', '').strip()
+    if not taxon_name:
+        flash('Informe um táxon.', 'danger')
+        return redirect(url_for('index'))
+    allowed = current_allowed_taxa()
+    if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
+        flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
+        return redirect(url_for('index'))
+    if PLANILHA_DF is None:
+        flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
+        return redirect(url_for('index'))
+    job_id = uuid.uuid4().hex
+    CONTRIB_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                            'result_path': None, 'error': None, 'taxon_name': taxon_name}
+    t = threading.Thread(target=_contrib_worker,
+                         args=(job_id, taxon_name, category, PLANILHA_DF.copy()),
+                         daemon=True)
+    t.start()
+    return redirect(url_for('contrib_status', job_id=job_id))
+
+@app.route('/contrib/status/<job_id>')
+def contrib_status(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    job = CONTRIB_JOBS.get(job_id)
+    if job is None:
+        flash('Job não encontrado.', 'danger')
+        return redirect(url_for('index'))
+    return render_template(tmpl('contrib_status'),
+                           job=job, job_id=job_id,
+                           username=user.username, is_admin=user.is_admin)
+
+@app.route('/contrib/download/<job_id>')
+def contrib_download(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    job = CONTRIB_JOBS.get(job_id)
+    if not job or job['status'] != 'done' or not job.get('result_path'):
+        flash('Resultado não disponível.', 'danger')
+        return redirect(url_for('index'))
+    taxon_safe = (job.get('taxon_name') or 'taxon').replace(' ', '_').replace('/', '-')
+    return send_file(job['result_path'], as_attachment=True,
+                     download_name=f'contrib_{taxon_safe}.zip')
+
+@app.route('/contrib/poll/<job_id>')
+def contrib_poll(job_id):
+    from flask import jsonify
+    job = CONTRIB_JOBS.get(job_id, {'status': 'not_found'})
     return jsonify({k: v for k, v in job.items() if k != 'result_path'})
 
 @app.route('/admin/update_ipt', methods=['POST'])

@@ -137,6 +137,28 @@
                     para identificar lacunas de catalogação.
                 </div>
             </label>
+            <label class="type-card" id="card-authors" style="grid-column: span 2;">
+                <input type="radio" name="analysis_type" value="authors"
+                       onchange="selectType('authors')">
+                <div class="card-icon">✍️</div>
+                <div class="card-title">Autores e acessos</div>
+                <div class="card-desc">
+                    Lista os autores do táxon e de todos os seus táxons subordinados, com
+                    datas de primeiro e último acesso, número de alterações nos últimos
+                    1/2/5/10 anos e total de acessos.
+                </div>
+            </label>
+            <label class="type-card" id="card-contrib" style="grid-column: span 2;">
+                <input type="radio" name="analysis_type" value="contrib"
+                       onchange="selectType('contrib')">
+                <div class="card-icon">👥</div>
+                <div class="card-title">Contribuidores</div>
+                <div class="card-desc">
+                    Lista os contribuidores (nome completo) que editaram o táxon e seus
+                    táxons subordinados (classe, ordem, família, gênero), com total_geral
+                    e acessos no último ano.
+                </div>
+            </label>
         </div>
 
         <p class="gbif-note" id="gbifNote">
@@ -205,28 +227,38 @@
 const ACTIONS = {
     data: "{{ url_for('analyze_taxon') }}",
     gbif: "{{ url_for('gbif_gap') }}",
-    invasive: "{{ url_for('invasive_gap') }}"
+    invasive: "{{ url_for('invasive_gap') }}",
+    authors: "{{ url_for('authors_analysis') }}",
+    contrib: "{{ url_for('contrib_analysis') }}"
 };
 
 function selectType(type) {
     document.getElementById('card-data').classList.toggle('selected', type === 'data');
     document.getElementById('card-gbif').classList.toggle('selected', type === 'gbif');
     document.getElementById('card-invasive').classList.toggle('selected', type === 'invasive');
+    document.getElementById('card-authors').classList.toggle('selected', type === 'authors');
+    document.getElementById('card-contrib').classList.toggle('selected', type === 'contrib');
     document.getElementById('mainForm').action = ACTIONS[type];
     document.getElementById('gbifNote').classList.toggle('visible', type === 'gbif');
-    
+
     const taxonField = document.getElementById('taxon');
     const submitBtn = document.getElementById('submitBtn');
-    
+
     taxonField.required = true;
     taxonField.disabled = false;
-    
+
     if (type === 'invasive') {
         taxonField.placeholder = "Táxon (ex: Animalia, Chordata...)";
         submitBtn.textContent = 'Analisar Invasoras';
     } else if (type === 'gbif') {
         taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'Iniciar análise GBIF';
+    } else if (type === 'authors') {
+        taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
+        submitBtn.textContent = 'Listar autores e acessos';
+    } else if (type === 'contrib') {
+        taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
+        submitBtn.textContent = 'Listar contribuidores';
     } else {
         taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'Analisar';
