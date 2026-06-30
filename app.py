@@ -200,6 +200,12 @@ CONTRIB_REPORT_URL = os.environ.get(
     'CONTRIB_REPORT_URL',
     'https://fauna.jbrj.gov.br/csv/mv_relatorio_contribuicao_usuarios'
 )
+# PostgREST view backing the same report — reliable JSON fallback when the heavy
+# /csv export endpoint returns 502/503/504.
+CONTRIB_API_URL = os.environ.get(
+    'CONTRIB_API_URL',
+    'https://fauna.jbrj.gov.br/rest/mv_relatorio_contribuicao_usuarios'
+)
 
 def download_fauna_csv(dest_path):
     """Download the full Catalogo Taxonomico da Fauna do Brasil dataset from the
@@ -1092,6 +1098,62 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
     except Exception as e:
         AUTHORS_JOBS[job_id].update(status='error', error=str(e))
 
+def load_contrib_report(progress_cb=None):
+    """Return the contributor report as a DataFrame.
+
+    The /csv export endpoint is heavy and frequently 502/503/504s, so try it a few
+    times with backoff, then fall back to the PostgREST view (paginated JSON), which
+    is much more reliable. Raises the last error if both sources fail."""
+    import time as _time
+    from io import BytesIO
+    last_err = None
+
+    # 1) CSV export, with retries.
+    for attempt in range(3):
+        try:
+            resp = requests.get(CONTRIB_REPORT_URL, timeout=120)
+            resp.raise_for_status()
+            df = pd.read_csv(BytesIO(resp.content))
+            df.columns = [c.strip().lower() for c in df.columns]
+            return df
+        except Exception as e:
+            last_err = e
+            if progress_cb:
+                progress_cb(f'Relatório indisponível (tentativa {attempt + 1}/3)…')
+            _time.sleep(2 * (attempt + 1))
+
+    # 2) PostgREST fallback (paginated JSON).
+    if progress_cb:
+        progress_cb('Usando endpoint alternativo (API)…')
+    try:
+        sess = requests.Session()
+        rows = []
+        offset, page = 0, 5000
+        cols = ('login,nome_completo,email,total_geral,total_12_meses,'
+                'filos_alterados,classes_alteradas,familias_alteradas')
+        while True:
+            url = f'{CONTRIB_API_URL}?limit={page}&offset={offset}&select={cols}'
+            resp = sess.get(url, timeout=120, headers={'Accept': 'application/json'})
+            resp.raise_for_status()
+            batch = resp.json()
+            if not batch:
+                break
+            rows.extend(batch)
+            if len(batch) < page:
+                break
+            offset += page
+        if rows:
+            df = pd.DataFrame(rows)
+            df.columns = [c.strip().lower() for c in df.columns]
+            return df
+    except Exception as e:
+        last_err = e
+
+    raise RuntimeError(
+        'O relatório de contribuição da Fauna do Brasil está indisponível no momento '
+        '(servidor JBRJ retornou erro). Tente novamente em alguns minutos. '
+        f'Detalhe: {last_err}')
+
 def _contrib_worker(job_id, taxon_name, category, planilha_df):
     """List the contributors (nome_completo) who edited the requested taxon or any
     of its subordinate taxa, with their total_geral and last-year access counts.
@@ -1179,13 +1241,9 @@ def _contrib_worker(job_id, taxon_name, category, planilha_df):
                        'correspondente no relatório de contribuição.'))
             return
 
-        # ── Phase 2: download the contributor report ──
+        # ── Phase 2: download the contributor report (with API fallback) ──
         update('Baixando relatório de contribuição…', 35)
-        from io import BytesIO
-        resp = requests.get(CONTRIB_REPORT_URL, timeout=120)
-        resp.raise_for_status()
-        rep = pd.read_csv(BytesIO(resp.content))
-        rep.columns = [c.strip().lower() for c in rep.columns]
+        rep = load_contrib_report(progress_cb=lambda m: update(m))
 
         col_phylum = 'filos_alterados'
         col_class  = 'classes_alteradas'
