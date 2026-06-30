@@ -1015,6 +1015,18 @@ def _contrib_worker(job_id, taxon_name, category, planilha_df):
                     taxon_rank_idx = RANK_HIERARCHY.index(col)
                     break
 
+        # Higher classification of the searched taxon (every matched row shares the
+        # same ancestors). Ordered coarse → fine, only ranks above the taxon.
+        higher_class = []  # list of (rank, value)
+        if not include_all and taxon_rank_idx > 0:
+            for rank in RANK_HIERARCHY[:taxon_rank_idx]:
+                if rank not in sub.columns:
+                    continue
+                vals = sorted({v for v in sub[rank].dropna().astype(str).str.strip()
+                               if v and v.lower() != 'nan'})
+                if vals:
+                    higher_class.append((rank, ' / '.join(vals)))
+
         # The contributor report only knows phylum/class/family.
         REPORT_LEVELS = ['phylum', 'class', 'family']
         valid_names = {lvl: set() for lvl in REPORT_LEVELS}
@@ -1098,6 +1110,11 @@ def _contrib_worker(job_id, taxon_name, category, planilha_df):
         contrib = contrib.sort_values(['total_geral', 'nome_completo'],
                                       ascending=[False, True]).reset_index(drop=True)
 
+        # Prepend the searched taxon's higher classification as context columns
+        # (same value on every row), coarse → fine.
+        for rank, value in reversed(higher_class):
+            contrib.insert(0, rank, value)
+
         if contrib.empty:
             CONTRIB_JOBS[job_id].update(
                 status='error',
@@ -1107,12 +1124,15 @@ def _contrib_worker(job_id, taxon_name, category, planilha_df):
         # ── Phase 4: write XLSX + ZIP ──
         update('Gerando arquivo XLSX…', 90)
         result_path = os.path.join('/tmp', f'contrib_{job_id}.xlsx')
-        summary_df = pd.DataFrame([
-            ('Táxon analisado', taxon_name),
+        summary_rows = [('Táxon analisado', taxon_name)]
+        summary_rows += [(f'Classificação superior — {rank}', value)
+                         for rank, value in higher_class]
+        summary_rows += [
             ('Contribuidores', int(len(contrib))),
             ('total_geral (soma)', int(contrib['total_geral'].sum())),
             ('Acessos no último ano (soma)', int(contrib['acessos_ultimo_ano'].sum())),
-        ], columns=['Métrica', 'Valor'])
+        ]
+        summary_df = pd.DataFrame(summary_rows, columns=['Métrica', 'Valor'])
         with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
             summary_df.to_excel(writer, sheet_name='Resumo', index=False)
             contrib.to_excel(writer, sheet_name='Contribuidores', index=False)
