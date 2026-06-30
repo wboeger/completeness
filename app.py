@@ -1023,7 +1023,32 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
                                  .rename_axis('scientificNameAuthorship')
                                  .reset_index(name='n_taxa'))
         else:
+            auth = pd.Series([], dtype=str)
             author_counts = pd.DataFrame(columns=['scientificNameAuthorship', 'n_taxa'])
+
+        # ── Individual authors: split authorship by comma/&/"e"/"and", drop the
+        # year, and count how many times each name appears (≈ how many species each
+        # author described within the taxon). ──
+        import re as _re
+        from collections import Counter as _Counter
+
+        def _split_authors(s):
+            s = _re.sub(r'[()\[\]]', ' ', s)        # drop brackets
+            s = _re.sub(r'\b\d{3,4}\b', ' ', s)     # drop year numbers
+            names = []
+            for p in _re.split(r'\s*(?:,|&|\be\b|\band\b)\s*', s):
+                p = p.strip(' .,;:')
+                if p and not p.isdigit():
+                    names.append(p)
+            return names
+
+        _counter = _Counter()
+        for _s in auth:
+            for _name in _split_authors(_s):
+                _counter[_name] += 1
+        individual_counts = pd.DataFrame(
+            sorted(_counter.items(), key=lambda kv: (-kv[1], kv[0])),
+            columns=['autor', 'n_especies'])
 
         # ── Access / change dates (modified column) ──
         update('Calculando datas de acesso…', 70)
@@ -1061,6 +1086,7 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
             ('Táxon analisado', taxon_name),
             ('Táxons (este e subordinados)', int(len(sub))),
             ('Autores distintos', int(len(author_counts))),
+            ('Autores individuais distintos', int(len(individual_counts))),
             ('Primeiro acesso', first_access),
             ('Último acesso', last_access),
             ('Alterações no último 1 ano', n_chg_1),
@@ -1076,6 +1102,7 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
         with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
             summary_df.to_excel(writer, sheet_name='Resumo', index=False)
             author_counts.to_excel(writer, sheet_name='Autores', index=False)
+            individual_counts.to_excel(writer, sheet_name='Autores_individuais', index=False)
             detail.to_excel(writer, sheet_name='Taxa', index=False)
 
         zip_path = os.path.join('/tmp', f'authors_{job_id}.zip')
