@@ -132,17 +132,6 @@
                     to identify cataloging gaps.
                 </div>
             </label>
-            <label class="type-card" id="card-authors" style="grid-column: span 2;">
-                <input type="radio" name="analysis_type" value="authors"
-                       onchange="selectType('authors')">
-                <div class="card-icon">✍️</div>
-                <div class="card-title">Authors and accesses</div>
-                <div class="card-desc">
-                    Lists the authors of the taxon and all of its subordinate taxa, with
-                    first and last access dates, number of changes in the last 1/2/5/10
-                    years and the total access count.
-                </div>
-            </label>
             <label class="type-card" id="card-contrib" style="grid-column: span 2;">
                 <input type="radio" name="analysis_type" value="contrib"
                        onchange="selectType('contrib')">
@@ -223,7 +212,6 @@ const ACTIONS = {
     data: "{{ url_for('analyze_taxon') }}",
     gbif: "{{ url_for('gbif_gap') }}",
     invasive: "{{ url_for('invasive_gap') }}",
-    authors: "{{ url_for('authors_analysis') }}",
     contrib: "{{ url_for('contrib_analysis') }}"
 };
 
@@ -231,7 +219,6 @@ function selectType(type) {
     document.getElementById('card-data').classList.toggle('selected', type === 'data');
     document.getElementById('card-gbif').classList.toggle('selected', type === 'gbif');
     document.getElementById('card-invasive').classList.toggle('selected', type === 'invasive');
-    document.getElementById('card-authors').classList.toggle('selected', type === 'authors');
     document.getElementById('card-contrib').classList.toggle('selected', type === 'contrib');
     document.getElementById('mainForm').action = ACTIONS[type];
     document.getElementById('gbifNote').classList.toggle('visible', type === 'gbif');
@@ -248,9 +235,6 @@ function selectType(type) {
     } else if (type === 'gbif') {
         taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'Start GBIF analysis';
-    } else if (type === 'authors') {
-        taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
-        submitBtn.textContent = 'List authors and accesses';
     } else if (type === 'contrib') {
         taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'List contributors';
