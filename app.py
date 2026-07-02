@@ -1012,23 +1012,19 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
                 error=f'Nenhum táxon encontrado para "{taxon_name}".')
             return
 
-        # ── Authors (scientificNameAuthorship) ──
-        update('Compilando autores…', 50)
-        author_col = 'scientificnameauthorship'
-        if author_col in sub.columns:
-            auth = sub[author_col]
-            auth = auth[auth.notna()].astype(str).str.strip()
-            auth = auth[auth.ne('') & ~auth.str.lower().isin(['nan', 'none'])]
-            author_counts = (auth.value_counts()
-                                 .rename_axis('scientificNameAuthorship')
-                                 .reset_index(name='n_taxa'))
+        # ── Split by taxonomic status: NOME ACEITO (accepted) vs SINONIMIA (synonym) ──
+        if 'taxonomicstatus' in sub.columns:
+            _status_upper = sub['taxonomicstatus'].astype(str).str.upper().str.strip()
+            status_groups = {
+                'NOME ACEITO': sub[_status_upper == 'ACCEPTED'],
+                'SINONIMIA': sub[_status_upper != 'ACCEPTED'],
+            }
         else:
-            auth = pd.Series([], dtype=str)
-            author_counts = pd.DataFrame(columns=['scientificNameAuthorship', 'n_taxa'])
+            status_groups = {'NOME ACEITO': sub}
 
-        # ── Individual authors: split authorship by comma/&/"e"/"and", drop the
-        # year, and count how many times each name appears (≈ how many species each
-        # author described within the taxon). ──
+        author_col = 'scientificnameauthorship'
+        rank_col = 'taxonrank'
+
         import re as _re
         from collections import Counter as _Counter
 
@@ -1042,13 +1038,50 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
                     names.append(p)
             return names
 
-        _counter = _Counter()
-        for _s in auth:
-            for _name in _split_authors(_s):
-                _counter[_name] += 1
-        individual_counts = pd.DataFrame(
-            sorted(_counter.items(), key=lambda kv: (-kv[1], kv[0])),
-            columns=['autor', 'n_especies'])
+        def _compute_author_counts(group_df):
+            if author_col in group_df.columns:
+                a = group_df[author_col]
+                a = a[a.notna()].astype(str).str.strip()
+                a = a[a.ne('') & ~a.str.lower().isin(['nan', 'none'])]
+                counts = (a.value_counts()
+                            .rename_axis('scientificNameAuthorship')
+                            .reset_index(name='n_taxa'))
+            else:
+                a = pd.Series([], dtype=str)
+                counts = pd.DataFrame(columns=['scientificNameAuthorship', 'n_taxa'])
+            return a, counts
+
+        def _compute_individual_counts(auth_series):
+            counter = _Counter()
+            for s in auth_series:
+                for name in _split_authors(s):
+                    counter[name] += 1
+            return pd.DataFrame(
+                sorted(counter.items(), key=lambda kv: (-kv[1], kv[0])),
+                columns=['autor', 'n_especies'])
+
+        def _compute_category_counts(group_df):
+            if rank_col in group_df.columns:
+                r = group_df[rank_col].astype(str).str.strip()
+                r = r[r.ne('') & ~r.str.lower().isin(['nan', 'none'])]
+                return (r.value_counts()
+                          .rename_axis('categoria')
+                          .reset_index(name='n_taxa'))
+            return pd.DataFrame(columns=['categoria', 'n_taxa'])
+
+        update('Compilando autores…', 50)
+        author_counts_by_status = {}
+        individual_counts_by_status = {}
+        category_counts_by_status = {}
+        for status_label, group_df in status_groups.items():
+            auth, counts = _compute_author_counts(group_df)
+            author_counts_by_status[status_label] = counts
+            individual_counts_by_status[status_label] = _compute_individual_counts(auth)
+            category_counts_by_status[status_label] = _compute_category_counts(group_df)
+
+        # Combined (all statuses together), kept for backward-compatible summary counts.
+        auth_all, author_counts = _compute_author_counts(sub)
+        individual_counts = _compute_individual_counts(auth_all)
 
         # ── Access / change dates (modified column) ──
         update('Calculando datas de acesso…', 70)
@@ -1070,23 +1103,35 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
                                                changes_since(5), changes_since(10))
         total_access = int(len(mod))
 
-        # ── Detail sheet: one row per taxon with author + access date ──
-        detail_cols = [c for c in ['taxonid', 'scientificname', 'taxonrank', 'family',
-                                    'genus', 'scientificnameauthorship', 'modified']
+        # ── Detail sheet: one row per taxon with status + author + access date ──
+        detail_cols = [c for c in ['taxonid', 'scientificname', 'taxonomicstatus', 'taxonrank',
+                                    'family', 'genus', 'scientificnameauthorship', 'modified']
                        if c in sub.columns]
         detail = sub[detail_cols].copy().rename(columns={
             'taxonid': 'taxonID', 'scientificname': 'scientificName',
+            'taxonomicstatus': 'taxonomicStatus',
             'taxonrank': 'taxonRank',
             'scientificnameauthorship': 'scientificNameAuthorship',
             'modified': 'modified',
         })
+        if 'taxonomicStatus' in detail.columns:
+            detail['taxonomicStatus'] = detail['taxonomicStatus'].astype(str).str.upper().str.strip().map(
+                lambda v: 'NOME ACEITO' if v == 'ACCEPTED' else 'SINONIMIA')
 
         # ── Summary sheet ──
-        summary_df = pd.DataFrame([
+        summary_rows = [
             ('Táxon analisado', taxon_name),
             ('Táxons (este e subordinados)', int(len(sub))),
             ('Autores distintos', int(len(author_counts))),
             ('Autores individuais distintos', int(len(individual_counts))),
+        ]
+        for status_label, group_df in status_groups.items():
+            summary_rows.append((f'Táxons — {status_label}', int(len(group_df))))
+            summary_rows.append((f'Autores distintos — {status_label}',
+                                  int(len(author_counts_by_status[status_label]))))
+            summary_rows.append((f'Autores individuais distintos — {status_label}',
+                                  int(len(individual_counts_by_status[status_label]))))
+        summary_rows += [
             ('Primeiro acesso', first_access),
             ('Último acesso', last_access),
             ('Alterações no último 1 ano', n_chg_1),
@@ -1094,15 +1139,25 @@ def _authors_worker(job_id, taxon_name, category, planilha_df):
             ('Alterações nos últimos 5 anos', n_chg_5),
             ('Alterações nos últimos 10 anos', n_chg_10),
             ('Total de acessos (registros com data)', total_access),
-        ], columns=['Métrica', 'Valor'])
+        ]
+        summary_df = pd.DataFrame(summary_rows, columns=['Métrica', 'Valor'])
 
         # ── Write XLSX + ZIP ──
         update('Gerando arquivo XLSX…', 90)
+        _sheet_suffix = {'NOME ACEITO': 'NomeAceito', 'SINONIMIA': 'Sinonimia'}
         result_path = os.path.join('/tmp', f'authors_{job_id}.xlsx')
         with pd.ExcelWriter(result_path, engine='openpyxl') as writer:
             summary_df.to_excel(writer, sheet_name='Resumo', index=False)
             author_counts.to_excel(writer, sheet_name='Autores', index=False)
             individual_counts.to_excel(writer, sheet_name='Autores_individuais', index=False)
+            for status_label in status_groups:
+                suffix = _sheet_suffix.get(status_label, status_label)
+                author_counts_by_status[status_label].to_excel(
+                    writer, sheet_name=f'Autores_{suffix}', index=False)
+                individual_counts_by_status[status_label].to_excel(
+                    writer, sheet_name=f'Autores_ind_{suffix}', index=False)
+                category_counts_by_status[status_label].to_excel(
+                    writer, sheet_name=f'Categorias_{suffix}', index=False)
             detail.to_excel(writer, sheet_name='Taxa', index=False)
 
         zip_path = os.path.join('/tmp', f'authors_{job_id}.zip')
