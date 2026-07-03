@@ -2275,6 +2275,26 @@ def manual():
             return ('Manual not available.', 404)
     return send_file(path, mimetype='application/pdf')
 
+
+# --- Cross-service data sharing (e.g. Livro_ctfb) ---
+# Token-protected, separate from user session auth since callers are other
+# Railway services, not logged-in browsers. Set DATA_SHARE_TOKEN in both
+# services' env vars to the same secret value.
+SHAREABLE_DATA_FILES = {
+    'planilha_extendida.csv': LOCAL_PLANILHA,
+    'pesquisadores.xlsx': LOCAL_PESQUISADORES,
+}
+
+@app.route('/api/data/<name>')
+def shared_data_file(name):
+    token = os.environ.get('DATA_SHARE_TOKEN')
+    if not token or request.headers.get('X-Api-Token') != token:
+        return ('Unauthorized', 401)
+    path = SHAREABLE_DATA_FILES.get(name)
+    if not path or not os.path.exists(path):
+        return ('Not found', 404)
+    return send_file(path, as_attachment=True, download_name=name)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
