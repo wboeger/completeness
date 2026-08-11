@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Crapette</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root { --cw: 44px; --ch: 63px; }
+body {
+  background: #1a6b2f;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overflow: hidden; height: 100dvh;
+  display: flex; flex-direction: column;
+  user-select: none; touch-action: manipulation;
+}
+
+/* ── TOP BAR ── */
+#topbar {
+  background: rgba(0,0,0,0.45); color: #fff;
+  padding: 5px 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  flex-shrink: 0; gap: 4px;
+}
+.pinfo { font-size: 11px; opacity: 0.85; min-width: 70px; }
+.pinfo.right { text-align: right; }
+#turn-label { font-weight: 700; font-size: 13px; text-align: center; flex: 1; }
+#btn-new {
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
+  color: #fff; border-radius: 5px; padding: 2px 8px; font-size: 11px; cursor: pointer;
+}
+
+/* ── GAME AREA ── */
+#game {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 3px; gap: 3px; min-height: 0;
+}
+
+/* ── PLAYER STOCK ZONES ── */
+.stock-zone {
+  display: flex; gap: 6px; justify-content: center; flex-shrink: 0;
+}
+.stock-zone.p2 { transform: rotate(180deg); }
+
+/* ── FOUNDATIONS ── */
+#found-wrap {
+  background: rgba(0,0,0,0.18); border-radius: 7px;
+  padding: 4px 3px 3px; flex-shrink: 0;
+}
+#found-label {
+  font-size: 9px; color: rgba(255,255,255,0.5); letter-spacing: 1.5px;
+  text-align: center; margin-bottom: 3px;
+}
+#foundations { display: flex; gap: 3px; justify-content: center; }
+
+/* ── TABLEAU ── */
+#tableau {
+  flex: 1; display: flex; gap: 3px;
+  justify-content: center; align-items: flex-start;
+  min-height: 0; overflow: hidden;
+}
+.tab-col {
+  position: relative; width: var(--cw); flex-shrink: 0;
+}
+
+/* ── PILE SLOTS ── */
+.slot {
+  width: var(--cw); height: var(--ch);
+  border: 1.5px dashed rgba(255,255,255,0.22);
+  border-radius: 5px; position: relative; flex-shrink: 0;
+}
+.slot.hint {
+  border-color: #2ecc71; border-style: solid;
+  box-shadow: 0 0 6px #2ecc7188;
+}
+.slot-lbl {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 600;
+  color: rgba(255,255,255,0.3); pointer-events: none;
+}
+
+/* ── CARDS ── */
+.card {
+  position: absolute; width: var(--cw); height: var(--ch);
+  border-radius: 5px; border: 1px solid rgba(0,0,0,0.22);
+  cursor: pointer; background: #fff;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 2px 3px; font-weight: 700; line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: box-shadow 0.08s, transform 0.08s;
+}
+.card.red { color: #c0392b; }
+.card.black { color: #1a1a1a; }
+.card .cr { font-size: 11px; }
+.card .cs { font-size: 13px; align-self: flex-end; }
+
+.card.back {
+  background: repeating-linear-gradient(45deg,#1144aa,#1144aa 4px,#1a5fcc 4px,#1a5fcc 8px);
+  border: 2px solid #0d3380;
+}
+.card.back.p2 {
+  background: repeating-linear-gradient(45deg,#991111,#991111 4px,#cc2222 4px,#cc2222 8px);
+  border: 2px solid #660000;
+}
+.card.sel {
+  box-shadow: 0 0 0 3px #f1c40f, 0 3px 8px rgba(0,0,0,0.45);
+  transform: translateY(-4px); z-index: 50;
+}
+.card.hint {
+  box-shadow: 0 0 0 2px #2ecc71, 0 1px 3px rgba(0,0,0,0.3);
+}
+
+/* ── COUNT BADGE ── */
+.badge {
+  position: absolute; bottom: 2px; right: 3px;
+  background: rgba(0,0,0,0.5); color: #fff;
+  font-size: 9px; padding: 0 3px; border-radius: 3px;
+  pointer-events: none; z-index: 5; font-weight: 400;
+}
+
+/* ── ACTION ROW ── */
+#action-row {
+  display: flex; gap: 8px; padding: 2px 3px 4px; flex-shrink: 0;
+}
+#action-row button {
+  flex: 1; padding: 10px 0; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+}
+#btn-draw { background: #2980b9; color: #fff; }
+#btn-pass { background: #e74c3c; color: #fff; }
+#btn-draw:disabled { opacity: 0.45; }
+#btn-pass:disabled { opacity: 0.45; }
+
+/* ── OVERLAYS ── */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75); z-index: 100;
+  align-items: center; justify-content: center; flex-direction: column; gap: 20px;
+}
+.overlay.show { display: flex; }
+.obox {
+  background: #fff; border-radius: 14px;
+  padding: 24px 30px; text-align: center; max-width: 290px;
+}
+.obox h2 { font-size: 22px; margin-bottom: 8px; }
+.obox p { font-size: 13px; color: #555; margin-bottom: 16px; }
+.obox button, .overlay > button {
+  background: #1a6b2f; color: #fff; border: none;
+  border-radius: 9px; padding: 12px 28px; font-size: 16px;
+  font-weight: 700; cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="pinfo">P1 🂠<span id="p1n">0</span> w<span id="p1w">0</span></div>
+  <div id="turn-label">Player 1's Turn</div>
+  <div class="pinfo right">P2 🂠<span id="p2n">0</span> w<span id="p2w">0</span></div>
+  <button id="btn-new" onclick="newGame()">New</button>
+</div>
+
+<div id="game">
+  <div class="stock-zone p2" id="p2-zone"></div>
+
+  <div id="found-wrap">
+    <div id="found-label">FOUNDATIONS</div>
+    <div id="foundations"></div>
+  </div>
+
+  <div id="tableau"></div>
+
+  <div class="stock-zone" id="p1-zone"></div>
+</div>
+
+<div id="action-row">
+  <button id="btn-draw" onclick="drawCard()">Draw</button>
+  <button id="btn-pass" onclick="endTurn()">End Turn</button>
+</div>
+
+<div id="win-overlay" class="overlay">
+  <div class="obox">
+    <h2 id="win-title"></h2>
+    <p id="win-body"></p>
+    <button onclick="newGame()">Play Again</button>
+  </div>
+</div>
+
+<div id="pass-overlay" class="overlay">
+  <div class="obox">
+    <h2 id="pass-title"></h2>
+    <p id="pass-body"></p>
+  </div>
+  <button onclick="confirmPass()">Tap to Start Your Turn</button>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────
+const SUITS = ['♠','♥','♦','♣'];
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const RED = new Set(['♥','♦']);
+const rv = r => RANKS.indexOf(r) + 1;
+const color = s => RED.has(s) ? 'red' : 'black';
+
+let G = {};       // game state
+let sel = null;   // selected card: { src:'waste'|'tab', pid?, ci?, card }
+let nextTurn = null;
+
+// ── Setup ────────────────────────────────────────────
+function makeDeck(bc) {
+  const d = [];
+  for (const s of SUITS) for (const r of RANKS) d.push({s,r,up:false,bc});
+  return d;
+}
+function shuffle(a) {
+  for (let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+
+function newGame() {
+  document.getElementById('win-overlay').classList.remove('show');
+  document.getElementById('pass-overlay').classList.remove('show');
+  sel = null; nextTurn = null;
+
+  const d1 = shuffle(makeDeck(''));
+  const d2 = shuffle(makeDeck('p2'));
+
+  // 13 to talon, 4 face-up to tableau, rest to hand
+  const t1 = d1.splice(0,13), tab1 = d1.splice(0,4).map(c=>({...c,up:true})), h1 = d1;
+  const t2 = d2.splice(0,13), tab2 = d2.splice(0,4).map(c=>({...c,up:true})), h2 = d2;
+
+  G = {
+    players: [
+      {talon:t1, waste:[], hand:h1, id:0, name:'Player 1', bc:''},
+      {talon:t2, waste:[], hand:h2, id:1, name:'Player 2', bc:'p2'},
+    ],
+    found: [[],[],[],[],[],[],[],[]],   // 8 SHARED foundations
+    tab:   [...tab1.map(c=>[c]), ...tab2.map(c=>[c])],  // 8 columns
+    turn: 0, over: false,
+  };
+  render();
+}
+
+// ── Card sizing ───────────────────────────────────────
+function sizeCards() {
+  const vw = window.innerWidth;
+  const cw = Math.max(33, Math.min(48, (vw - 6 - 7*3) / 8 | 0));
+  const ch = (cw * 1.43) | 0;
+  document.documentElement.style.setProperty('--cw', cw+'px');
+  document.documentElement.style.setProperty('--ch', ch+'px');
+  return ch;
+}
+
+// ── Render ────────────────────────────────────────────
+function render() {
+  const ch = sizeCards();
+  const [p0,p1] = G.players;
+
+  document.getElementById('turn-label').textContent = G.players[G.turn].name + "'s Turn";
+  document.getElementById('p1n').textContent = p0.talon.length;
+  document.getElementById('p1w').textContent = p0.waste.length;
+  document.getElementById('p2n').textContent = p1.talon.length;
+  document.getElementById('p2w').textContent = p1.waste.length;
+
+  renderZone(0);
+  renderZone(1);
+  renderFound();
+  renderTab(ch);
+  updBtns();
+}
+
+function renderZone(pid) {
+  const pl = G.players[pid];
+  const zone = document.getElementById(pid===0 ? 'p1-zone' : 'p2-zone');
+  zone.innerHTML = '';
+
+  // Talon
+  const ts = mkSlot(); ts.dataset.id = 'talon-'+pid;
+  if (pl.talon.length > 0) {
+    const tc = mkCardEl({up:false,bc:pl.bc}, 'talon-'+pid);
+    const b = mkBadge(pl.talon.length); tc.appendChild(b); ts.appendChild(tc);
+  } else {
+    ts.appendChild(mkLbl(''));
+  }
+  zone.appendChild(ts);
+
+  // Waste
+  const ws = mkSlot(); ws.dataset.id = 'waste-'+pid;
+  if (pl.waste.length > 0) {
+    const top = pl.waste[pl.waste.length-1];
+    const wc = mkCardEl(top, 'waste-'+pid);  // original ref for === selection check
+    if (pl.waste.length > 1) { const b = mkBadge(pl.waste.length); wc.appendChild(b); }
+    ws.appendChild(wc);
+  } else {
+    ws.appendChild(mkLbl('waste'));
+  }
+  zone.appendChild(ws);
+}
+
+function renderFound() {
+  const row = document.getElementById('foundations');
+  row.innerHTML = '';
+  G.found.forEach((pile, fi) => {
+    const slot = mkSlot(); slot.dataset.id = 'f-'+fi;
+    // Green hint: selected card can go here
+    if (sel && canGoFound(sel.card, fi)) slot.classList.add('hint');
+    if (pile.length > 0) {
+      const top = pile[pile.length-1];
+      const fc = mkCardEl(top, 'f-'+fi);  // original ref
+      if (pile.length > 1) { const b = mkBadge(pile.length); fc.appendChild(b); }
+      slot.appendChild(fc);
+    } else {
+      slot.appendChild(mkLbl('A'));
+    }
+    row.appendChild(slot);
+  });
+}
+
+function renderTab(ch) {
+  const tab = document.getElementById('tableau');
+  tab.innerHTML = '';
+  const ov = Math.max(13, (ch * 0.28) | 0);
+
+  G.tab.forEach((col, ci) => {
+    const col_div = document.createElement('div');
+    col_div.className = 'tab-col';
+    col_div.style.height = (col.length === 0 ? ch : ch + (col.length-1)*ov) + 'px';
+
+    if (col.length === 0) {
+      const s = mkSlot();
+      s.style.position = 'absolute';
+      if (sel && sel.card.r === 'K') s.classList.add('hint');
+      s.appendChild(mkLbl('K'));
+      s.addEventListener('click', () => onEmptyTab(ci));
+      col_div.appendChild(s);
+    } else {
+      col.forEach((card, ri) => {
+        const cel = mkCardEl(card, 'tab-'+ci+'-'+ri);
+        cel.style.top = (ri*ov)+'px';
+        if (ri === col.length-1) {
+          if (sel && canGoTab(sel.card, card)) cel.classList.add('hint');
+          cel.addEventListener('click', () => onTabCard(ci, ri));
+        } else {
+          cel.style.pointerEvents = 'none';
+        }
+        col_div.appendChild(cel);
+      });
+    }
+    tab.appendChild(col_div);
+  });
+}
+
+function mkCardEl(card, id) {
+  const el = document.createElement('div');
+  el.className = 'card';
+  if (id) el.dataset.id = id;
+  if (!card.up) {
+    el.classList.add('back');
+    if (card.bc) el.classList.add(card.bc);
+    return el;
+  }
+  el.classList.add(color(card.s));
+  const r = document.createElement('div'); r.className='cr'; r.textContent=card.r;
+  const s = document.createElement('div'); s.className='cs'; s.textContent=card.s;
+  el.appendChild(r); el.appendChild(s);
+  if (sel && sel.card === card) el.classList.add('sel');
+  return el;
+}
+function mkSlot() { const d=document.createElement('div'); d.className='slot'; return d; }
+function mkLbl(t) { const d=document.createElement('div'); d.className='slot-lbl'; d.textContent=t; return d; }
+function mkBadge(n) { const d=document.createElement('div'); d.className='badge'; d.textContent=n; return d; }
+
+function updBtns() {
+  const pl = G.players[G.turn];
+  const canDraw = pl.talon.length > 0 || pl.hand.length > 0;
+  document.getElementById('btn-draw').disabled = !canDraw || G.over;
+  document.getElementById('btn-pass').disabled = G.over;
+}
+
+// ── Rules ────────────────────────────────────────────
+function canGoFound(card, fi) {
+  const pile = G.found[fi];
+  if (pile.length === 0) return card.r === 'A';
+  const top = pile[pile.length-1];
+  return card.s === top.s && rv(card.r) === rv(top.r)+1;
+}
+
+function canGoTab(card, target) {
+  if (!target || !target.up) return false;
+  return color(card.s) !== color(target.s) && rv(card.r) === rv(target.r)-1;
+}
+
+// ── Click handlers ────────────────────────────────────
+function onTalon(pid) { if (pid === G.turn) drawCard(); }
+
+function onWaste(pid) {
+  if (G.over || pid !== G.turn) return;
+  const pl = G.players[pid];
+  if (!pl.waste.length) return;
+  const card = pl.waste[pl.waste.length-1];
+  if (sel && sel.card === card) { sel=null; render(); return; }
+  sel = {src:'waste', pid, card};
+  render();
+}
+
+function onFound(fi) {
+  if (G.over || !sel) return;
+  if (canGoFound(sel.card, fi)) doMoveToFound(fi);
+}
+
+function onTabCard(ci, ri) {
+  if (G.over) return;
+  const col = G.tab[ci];
+  const card = col[ri];
+  if (!card.up) return;
+
+  // Tap same card → deselect
+  if (sel && sel.card === card) { sel=null; render(); return; }
+
+  // Something selected → try to move it here (target is top card)
+  if (sel && ri === col.length-1 && canGoTab(sel.card, card)) {
+    doMoveToTab(ci); return;
+  }
+
+  // Select this card (both players can pick from any tableau top)
+  sel = {src:'tab', ci, ri, card};
+  render();
+}
+
+function onEmptyTab(ci) {
+  if (!sel || sel.card.r !== 'K') return;
+  doMoveToTab(ci);
+}
+
+// Event delegation on #game
+document.getElementById('game').addEventListener('click', e => {
+  const el = e.target.closest('[data-id]');
+  if (!el) return;
+  const [type, ...rest] = el.dataset.id.split('-');
+  if (type === 'talon') onTalon(+rest[0]);
+  else if (type === 'waste') onWaste(+rest[0]);
+  else if (type === 'f') onFound(+rest[0]);
+  // tab clicks wired inline in renderTab
+});
+
+// ── Draw ─────────────────────────────────────────────
+function drawCard() {
+  if (G.over) return;
+  const pl = G.players[G.turn];
+  let card = pl.talon.length ? pl.talon.pop() : pl.hand.length ? pl.hand.pop() : null;
+  if (!card) return;
+  card.up = true;
+  pl.waste.push(card);
+  sel = {src:'waste', pid:G.turn, card};
+  render();
+}
+
+// ── Moves ─────────────────────────────────────────────
+function removeSel() {
+  if (sel.src === 'waste') G.players[sel.pid].waste.pop();
+  else G.tab[sel.ci].pop();
+}
+
+function doMoveToFound(fi) {
+  const card = sel.card; removeSel();
+  card.up = true; G.found[fi].push(card);
+  sel = null; checkWin(); render();
+}
+
+function doMoveToTab(ci) {
+  const card = sel.card; removeSel();
+  card.up = true; G.tab[ci].push(card);
+  sel = null; checkWin(); render();
+}
+
+// ── Turn ─────────────────────────────────────────────
+function endTurn() {
+  if (G.over) return;
+  sel = null;
+  const next = 1 - G.turn;
+  nextTurn = next;
+  document.getElementById('pass-title').textContent = G.players[next].name + "'s Turn";
+  document.getElementById('pass-body').textContent = 'Pass the phone to ' + G.players[next].name;
+  document.getElementById('pass-overlay').classList.add('show');
+}
+
+function confirmPass() {
+  document.getElementById('pass-overlay').classList.remove('show');
+  G.turn = nextTurn; nextTurn = null;
+  render();
+}
+
+// ── Win ───────────────────────────────────────────────
+function checkWin() {
+  for (const pl of G.players) {
+    if (!pl.talon.length && !pl.waste.length && !pl.hand.length) {
+      G.over = true;
+      setTimeout(() => {
+        document.getElementById('win-title').textContent = pl.name + ' Wins!';
+        document.getElementById('win-body').textContent = pl.name + ' played out all their cards!';
+        document.getElementById('win-overlay').classList.add('show');
+      }, 150);
+    }
+  }
+}
+
+window.addEventListener('resize', () => render());
+newGame();
+</script>
+</body>
+</html>
