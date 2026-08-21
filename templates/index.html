@@ -159,6 +159,17 @@
                     e acessos no último ano.
                 </div>
             </label>
+            <label class="type-card" id="card-anomalies" style="grid-column: span 2;">
+                <input type="radio" name="analysis_type" value="anomalies"
+                       onchange="selectType('anomalies')">
+                <div class="card-icon">🧬</div>
+                <div class="card-title">Anomalias de dados</div>
+                <div class="card-desc">
+                    Verifica o táxon e seus subordinados com as regras do checkctfb: binômios
+                    malformados, datas inválidas, referências órfãs, IDs duplicados e vocabulários
+                    fora do padrão. Relatório CSV agrupado por filo/classe/ordem/família.
+                </div>
+            </label>
         </div>
 
         <p class="gbif-note" id="gbifNote">
@@ -229,7 +240,8 @@ const ACTIONS = {
     gbif: "{{ url_for('gbif_gap') }}",
     invasive: "{{ url_for('invasive_gap') }}",
     authors: "{{ url_for('authors_analysis') }}",
-    contrib: "{{ url_for('contrib_analysis') }}"
+    contrib: "{{ url_for('contrib_analysis') }}",
+    anomalies: "{{ url_for('anomalies_check') }}"
 };
 
 function selectType(type) {
@@ -238,6 +250,7 @@ function selectType(type) {
     document.getElementById('card-invasive').classList.toggle('selected', type === 'invasive');
     document.getElementById('card-authors').classList.toggle('selected', type === 'authors');
     document.getElementById('card-contrib').classList.toggle('selected', type === 'contrib');
+    document.getElementById('card-anomalies').classList.toggle('selected', type === 'anomalies');
     document.getElementById('mainForm').action = ACTIONS[type];
     document.getElementById('gbifNote').classList.toggle('visible', type === 'gbif');
 
@@ -259,6 +272,9 @@ function selectType(type) {
     } else if (type === 'contrib') {
         taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'Listar contribuidores';
+    } else if (type === 'anomalies') {
+        taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
+        submitBtn.textContent = 'Verificar anomalias';
     } else {
         taxonField.placeholder = "ex: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'Analisar';

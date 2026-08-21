@@ -18,6 +18,9 @@ import matplotlib
 matplotlib.use('Agg') # Use the Agg backend for non-interactive plotting
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import checkctfb.parser as checkctfb_parser
+import checkctfb.rules as checkctfb_rules
+import checkctfb.report as checkctfb_report
 
 app = Flask(__name__)
 # SECRET_KEY must be stable across deployments so sessions survive restarts.
@@ -577,6 +580,7 @@ GBIF_JOBS = {}   # job_id → dict with status/progress/result
 INVASIVE_JOBS = {} # job_id → dict with status/progress/result
 AUTHORS_JOBS = {}  # job_id → dict with status/progress/result
 CONTRIB_JOBS = {}  # job_id → dict with status/progress/result
+ANOMALIES_JOBS = {} # job_id → dict with status/progress/result
 
 def _gbif_gap_worker(job_id, taxon_name, planilha_df):
     def update(progress, pct=None):
@@ -965,6 +969,113 @@ def _invasive_gap_worker(job_id, taxon_name, planilha_df):
 
     except Exception as e:
         INVASIVE_JOBS[job_id].update(status='error', error=str(e))
+
+def _anomalies_worker(job_id, taxon_name, category, planilha_df):
+    """Runs the checkctfb Taxon-table anomaly rules (malformed binomials,
+    bad dates, orphan references, invalid vocab, duplicate IDs, ...) over
+    the whole PLANILHA_DF, then keeps only the anomalies whose taxon falls
+    in the requested subtree. Reference-integrity rules (orphan_reference,
+    duplicate_taxon_id) need the FULL taxonID universe — running them on a
+    pre-filtered subtree makes every parent pointing outside that subtree
+    (i.e. almost every row) look orphaned. No DwC-A archive re-download —
+    reuses PLANILHA_DF already loaded in memory (see checkctfb/VENDORED.md).
+    """
+    def update(progress, pct=None):
+        ANOMALIES_JOBS[job_id]['progress'] = progress
+        if pct is not None:
+            ANOMALIES_JOBS[job_id]['pct'] = pct
+
+    try:
+        update('Convertendo a tabela completa para o formato checkctfb…', 10)
+        df = planilha_df  # already a defensive copy from the caller
+
+        df2 = df.copy()
+        # PLANILHA_DF normalizes taxonrank/taxonomicstatus to UPPERCASE for the
+        # app's own matching logic (see load_data_on_startup); checkctfb's rules
+        # are written against the DwC-A's native lowercase vocabulary.
+        for col in ('taxonrank', 'taxonomicstatus'):
+            if col in df2.columns:
+                df2[col] = df2[col].str.lower()
+        # NaN in an ID column (parentnameusageid, ...) forces pandas to read it
+        # as float64, so it stringifies as "31.0" instead of "31" — breaking
+        # every taxonID join against the int64 taxonid column. Render whole
+        # -number floats as plain int strings, NaN as "".
+        for col in df2.columns:
+            if df2[col].dtype.kind == 'f':
+                df2[col] = df2[col].map(
+                    lambda v: '' if pd.isna(v) else (str(int(v)) if float(v).is_integer() else str(v))
+                )
+
+        # PLANILHA_DF columns are lowercased on load; map back to the DwC term
+        # names checkctfb's rules are written against.
+        column_map = {name.lower(): name for name in checkctfb_parser.CANONICAL_FIELDS}
+        records = df2.rename(columns=column_map).to_dict('records')
+        rows = checkctfb_parser.rows_from_records(records)
+
+        update('Executando regras de anomalia na tabela completa…', 40)
+        all_anomalies = checkctfb_rules.run_rules(rows)
+
+        update('Filtrando táxons subordinados…', 75)
+        RANK_HIERARCHY = [
+            'phylum', 'superclass', 'class', 'subclass', 'infraclass',
+            'superorder', 'order', 'suborder', 'infraorder',
+            'superfamily', 'family', 'subfamily', 'tribe', 'subtribe',
+            'genus', 'subgenus',
+        ]
+        category = (category or '').strip().lower() or None
+        if category and category not in df.columns:
+            category = None
+        ranks_to_search = [category] if category else RANK_HIERARCHY
+
+        if taxon_name and taxon_name.lower() == 'animalia' and not category:
+            anomalies = all_anomalies
+            n_rows = len(rows)
+        else:
+            mask = pd.Series(False, index=df.index)
+            for rank in ranks_to_search:
+                if rank in df.columns:
+                    mask |= (df[rank].astype(str).str.lower().str.strip() == taxon_name.lower())
+            taxon_ids = set(df.loc[mask, 'taxonid'].astype(str)) if 'taxonid' in df.columns else set()
+            if not taxon_ids:
+                ANOMALIES_JOBS[job_id].update(
+                    status='error',
+                    error=f'Nenhum táxon encontrado para "{taxon_name}".')
+                return
+            anomalies = [a for a in all_anomalies if a.taxon_id in taxon_ids]
+            n_rows = len(taxon_ids)
+
+        update('Gerando relatório CSV (agrupado por filo/classe/ordem/família)…', 90)
+        csv_path = os.path.join('/tmp', f'anomalies_{job_id}.csv')
+        checkctfb_report.write_csv(anomalies, csv_path, rows)
+
+        from collections import Counter
+        counts = Counter((a.category, a.severity.value) for a in anomalies)
+        n_errors = sum(1 for a in anomalies if a.severity is checkctfb_rules.Severity.ERROR)
+        n_warnings = sum(1 for a in anomalies if a.severity is checkctfb_rules.Severity.WARNING)
+
+        zip_path = os.path.join('/tmp', f'anomalies_{job_id}.zip')
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.write(csv_path, f'anomalies_{job_id[:8]}.csv')
+            if os.path.exists('manual_pt.pdf'):
+                zf.write('manual_pt.pdf', 'manual_pt.pdf')
+            if os.path.exists('manual_en.pdf'):
+                zf.write('manual_en.pdf', 'manual_en.pdf')
+
+        ANOMALIES_JOBS[job_id].update(
+            status='done', pct=100, progress='Concluído.',
+            result_path=zip_path,
+            taxon_name=taxon_name,
+            n_rows=n_rows,
+            n_anomalies=len(anomalies),
+            n_errors=n_errors,
+            n_warnings=n_warnings,
+            category_counts=sorted(
+                ({'category': c, 'severity': s, 'count': n} for (c, s), n in counts.items()),
+                key=lambda d: (-d['count'], d['category'])
+            ),
+        )
+    except Exception as e:
+        ANOMALIES_JOBS[job_id].update(status='error', error=str(e))
 
 def _authors_worker(job_id, taxon_name, category, planilha_df):
     """List every author (scientificNameAuthorship) of the requested taxon and all
@@ -2802,6 +2913,65 @@ def invasive_gap_download(job_id):
 def invasive_gap_poll(job_id):
     from flask import jsonify
     job = INVASIVE_JOBS.get(job_id, {'status': 'not_found'})
+    return jsonify({k: v for k, v in job.items() if k != 'result_path'})
+
+@app.route('/anomalies', methods=['GET', 'POST'])
+def anomalies_check():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    if request.method == 'POST':
+        taxon_name = request.form.get('taxon', '').strip()
+        category = request.form.get('category', '').strip()
+        if not taxon_name:
+            flash('Informe um táxon.', 'danger')
+            return redirect(url_for('index'))
+        allowed = current_allowed_taxa()
+        if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
+            flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
+            return redirect(url_for('index'))
+        if PLANILHA_DF is None:
+            flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
+            return redirect(url_for('index'))
+        job_id = uuid.uuid4().hex
+        ANOMALIES_JOBS[job_id] = {'status': 'running', 'progress': 'Iniciando…', 'pct': 0,
+                                  'result_path': None, 'error': None, 'taxon_name': taxon_name}
+        t = threading.Thread(target=_anomalies_worker,
+                             args=(job_id, taxon_name, category, PLANILHA_DF.copy()),
+                             daemon=True)
+        t.start()
+        return redirect(url_for('anomalies_status', job_id=job_id))
+    return redirect(url_for('index'))
+
+@app.route('/anomalies/status/<job_id>')
+def anomalies_status(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    user = User.query.get(session['user_id'])
+    job = ANOMALIES_JOBS.get(job_id)
+    if job is None:
+        flash('Job não encontrado.', 'danger')
+        return redirect(url_for('index'))
+    return render_template(tmpl('anomalies_status'),
+                           job=job, job_id=job_id,
+                           username=user.username, is_admin=user.is_admin)
+
+@app.route('/anomalies/download/<job_id>')
+def anomalies_download(job_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    job = ANOMALIES_JOBS.get(job_id)
+    if not job or job['status'] != 'done' or not job.get('result_path'):
+        flash('Resultado não disponível.', 'danger')
+        return redirect(url_for('index'))
+    taxon_safe = (job.get('taxon_name') or 'taxon').replace(' ', '_').replace('/', '-')
+    return send_file(job['result_path'], as_attachment=True,
+                     download_name=f'anomalies_{taxon_safe}.zip')
+
+@app.route('/anomalies/poll/<job_id>')
+def anomalies_poll(job_id):
+    from flask import jsonify
+    job = ANOMALIES_JOBS.get(job_id, {'status': 'not_found'})
     return jsonify({k: v for k, v in job.items() if k != 'result_path'})
 
 @app.route('/authors', methods=['GET', 'POST'])

@@ -154,6 +154,17 @@
                     and last-year access counts.
                 </div>
             </label>
+            <label class="type-card" id="card-anomalies" style="grid-column: span 2;">
+                <input type="radio" name="analysis_type" value="anomalies"
+                       onchange="selectType('anomalies')">
+                <div class="card-icon">🧬</div>
+                <div class="card-title">Data anomalies</div>
+                <div class="card-desc">
+                    Checks the taxon and its subordinates against the checkctfb rules:
+                    malformed binomials, invalid dates, orphan references, duplicate IDs
+                    and out-of-vocabulary values. CSV report grouped by phylum/class/order/family.
+                </div>
+            </label>
         </div>
 
         <p class="gbif-note" id="gbifNote">
@@ -224,7 +235,8 @@ const ACTIONS = {
     gbif: "{{ url_for('gbif_gap') }}",
     invasive: "{{ url_for('invasive_gap') }}",
     authors: "{{ url_for('authors_analysis') }}",
-    contrib: "{{ url_for('contrib_analysis') }}"
+    contrib: "{{ url_for('contrib_analysis') }}",
+    anomalies: "{{ url_for('anomalies_check') }}"
 };
 
 function selectType(type) {
@@ -233,6 +245,7 @@ function selectType(type) {
     document.getElementById('card-invasive').classList.toggle('selected', type === 'invasive');
     document.getElementById('card-authors').classList.toggle('selected', type === 'authors');
     document.getElementById('card-contrib').classList.toggle('selected', type === 'contrib');
+    document.getElementById('card-anomalies').classList.toggle('selected', type === 'anomalies');
     document.getElementById('mainForm').action = ACTIONS[type];
     document.getElementById('gbifNote').classList.toggle('visible', type === 'gbif');
 
@@ -254,6 +267,9 @@ function selectType(type) {
     } else if (type === 'contrib') {
         taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'List contributors';
+    } else if (type === 'anomalies') {
+        taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
+        submitBtn.textContent = 'Check anomalies';
     } else {
         taxonField.placeholder = "e.g.: Nematomorpha, Coleoptera, Araneae…";
         submitBtn.textContent = 'Analyse';
