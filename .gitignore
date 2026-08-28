@@ -37,3 +37,7 @@ mv_planilha_extendida.json
 
 # macOS
 .DS_Store
+# Agent tooling (local, not part of app)
+.agents/
+.claude/
+skills-lock.json

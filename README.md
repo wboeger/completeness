@@ -1,6 +1,6 @@
 # Porcentômetro — Taxon Completeness Analysis App
 
-Web application for calculating and reporting data completeness of taxonomic records in the CTFB (Catálogo Taxonômico da Fauna do Brasil) Darwin Core Archive. Built in Python/Flask, it replicates the logic of the reference R script (`completeness_analysis.R`) and adds role-based access control and on-demand reporting via a browser interface.
+Web application for calculating and reporting data completeness of taxonomic records in the CTFB (Catálogo Taxonômico da Fauna do Brasil) Darwin Core Archive. Built in Python/Flask, it replicates the logic of the reference R script (`completeness_analysis.R`) and adds on-demand reporting via a browser interface. The app is open to anyone with the URL; only administrative actions (data uploads, user roster management) are protected by a single admin password.
 
 ---
 
@@ -23,7 +23,7 @@ Web application for calculating and reporting data completeness of taxonomic rec
 
 ## Overview
 
-Researchers responsible for specific taxonomic groups log in and request an analysis for their taxon (e.g., a phylum, class, order, or family). The app:
+Anyone with the app URL can request an analysis for a taxon (e.g., a phylum, class, order, or family) — no login is required. The app:
 
 - Filters the main dataset to the requested taxon and all its subordinate groups.
 - Calculates per-species data completeness following the official Porcentômetro rules.
@@ -41,18 +41,14 @@ On startup the app downloads two Google Sheets as XLSX:
 
 | Sheet | Content |
 |---|---|
-| `pesquisadores.xlsx` | Researcher login names and their assigned taxa (columns: `username`, `taxons`, `institution`) |
+| `pesquisadores.xlsx` | Researcher names, informational only (columns: `username`, `taxons`, `institution`) — no longer used for access control |
 | `planilha_extendida.xlsx` | Full CTFB dataset — one row per taxon record, Darwin Core columns |
 
-Both are cached in memory. A taxon hierarchy map is built from the main dataset (`phylum → class → order → family → genus`) and used for hierarchical authorization.
+Both are cached in memory. A taxon hierarchy map is built from the main dataset (`phylum → class → order → family → genus`) for internal category lookups.
 
-### 2. Authorization
+### 2. Access Control
 
-Each user is assigned one or more taxa in `pesquisadores.xlsx`. When a user requests a taxon:
-
-- If the taxon is directly in their allowed list → authorized.
-- If the taxon is a **child** of an allowed taxon in the hierarchy → authorized.
-- Admins bypass all restrictions.
+The main dashboard and every analysis/report route are open to anyone with the app URL — no login is required to run analyses or download results. Only administrative actions (uploading data, reloading data, managing the user roster, updating the IPT archive) require the single admin password, set via `ADMIN_PASSWORD`.
 
 ### 3. Analysis Pipeline
 
@@ -197,13 +193,9 @@ python app.py
 
 The app starts at `http://127.0.0.1:5000`.
 
-**Default admin credentials:**
-```
-username: admin
-password: adminpass
-```
+**Default admin password:** `adminpass` (override with the `ADMIN_PASSWORD` environment variable).
 
-> Change the admin password immediately after first login by editing the database or creating a new admin user via the admin panel.
+> Set `ADMIN_PASSWORD` to a strong value before deploying — it is the only credential protecting data uploads, data reloads, and user-roster management.
 
 > On startup the app downloads the two Google Sheets. Ensure internet access is available or the app will start with no data and all analyses will fail.
 
@@ -219,6 +211,7 @@ The app is production-ready with Gunicorn and supports PostgreSQL via the `DATAB
 |---|---|---|
 | `DATABASE_URL` | PostgreSQL connection string | SQLite (`instance/users.db`) |
 | `SECRET_KEY` | Flask session secret | Random 24-byte key (regenerated on restart — use a fixed value in production) |
+| `ADMIN_PASSWORD` | Password protecting the `/admin` panel and its actions | `adminpass` |
 
 ### Gunicorn start command
 
@@ -235,25 +228,17 @@ gunicorn app:app
 
 ## User Management
 
-Access the admin panel at `/admin` (admin login required).
+The `/admin` panel is gated by the single admin password (`ADMIN_PASSWORD`), not per-account login. It keeps a roster of researchers for record-keeping (add, bulk-add, CSV import/export, password reset), but no visitor authenticates against these accounts — every analysis route is open to anyone with the app URL.
 
-### Add a user
+### Add a researcher to the roster
 
 1. Go to `/admin` → **Add User**.
-2. Enter username, password, and optionally check **Admin**.
+2. Enter username and password. These are stored for reference but do not gate app access.
 3. Open `pesquisadores.xlsx` (Google Sheet) and add a row:
    ```
    username | Taxon A; Taxon B, Taxon C | Institution name
    ```
-   Taxa can be separated by `;` or `,`. The name in column 1 must exactly match the login username (case-insensitive).
-
-### Authorization logic
-
-A user can analyse any taxon that is:
-- Listed directly in their `taxons` column, **or**
-- A taxonomic child of a listed taxon (walks up the hierarchy automatically).
-
-Example: a user assigned `Chordata` can analyse any class, order, family, genus, or species within Chordata.
+   Taxa can be separated by `;` or `,`.
 
 ---
 
@@ -283,7 +268,7 @@ completeness/
 │   └── style.css
 ├── templates/
 │   ├── index.html          # Main dashboard
-│   ├── login.html
+│   ├── admin_login.html
 │   ├── admin.html
 │   └── add_user.html
 ├── data/                   # Local fallback data (not used in production)

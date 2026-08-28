@@ -39,7 +39,10 @@
     <div class="nav">
         <a href="{{ url_for('gbif_gap') }}">← New analysis</a>
         <a href="{{ url_for('index') }}">Porcentômetro</a>
-        <a href="{{ url_for('logout') }}">Logout</a>
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Admin logout</a>
+        {% endif %}
     </div>
 
     <h1>GBIF × CTFB Analysis</h1>

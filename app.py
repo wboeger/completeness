@@ -60,6 +60,7 @@ PLANILHA_EXTENDIDA_SHEET_URL = "https://drive.usercontent.google.com/download?id
 INVASIVE_LIST_URL = "https://drive.google.com/uc?export=download&id=1_KHngk2dHKir5Phsndpp_eN_bydBYM3s"
 IPT_SOURCE_URL = "https://ipt.jbrj.gov.br/jbrj/archive.do?r=catalogo_taxonomico_da_fauna_do_brasil&v=1.50"
 IPT_COMBINED_SHEET_URL = os.environ.get('IPT_COMBINED_SHEET_URL', '')
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'adminpass')
 DATA_DATES_FILE = os.path.join(os.path.dirname(__file__), 'data', 'data_dates.json')
 # --- End Configuration ---
 
@@ -552,28 +553,6 @@ def run_db_migrations():
             print(f"  Migration skipped ({_e})")
 
 import re as _re
-
-def get_user_taxa(user):
-    """Return the lowercase taxa list authorised for a user, read from the in-memory
-    pesquisadores table. Computed per request rather than stored in the session cookie,
-    because a researcher may be assigned many taxa (phylum + class + dozens of families)
-    which would overflow the 4 KB browser cookie limit and silently drop the session."""
-    if user is not None and PESQUISADORES_DF is not None and 'login' in PESQUISADORES_DF.columns:
-        row = PESQUISADORES_DF[PESQUISADORES_DF['login'].str.lower() == user.username.lower()]
-        if not row.empty and 'táxons' in PESQUISADORES_DF.columns:
-            taxa_str = row.iloc[0]['táxons']
-            if isinstance(taxa_str, str):
-                return sorted(
-                    t.strip().lower() for t in _re.split(r'[;,]', taxa_str) if t.strip()
-                )
-    return []
-
-def current_allowed_taxa():
-    """Authorised taxa for the currently logged-in user (empty if not logged in)."""
-    uid = session.get('user_id')
-    if not uid:
-        return []
-    return get_user_taxa(User.query.get(uid))
 
 # ── GBIF gap analysis ──────────────────────────────────────────────────────────
 GBIF_JOBS = {}   # job_id → dict with status/progress/result
@@ -2364,13 +2343,9 @@ def set_lang(code):
 
 @app.route('/')
 def index():
-    if 'user_id' not in session: return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     return render_template(tmpl('index'),
-                           username=user.username,
-                           is_admin=user.is_admin,
+                           is_admin=session.get('is_admin', False),
                            data_loaded=DATA_LOADED_SUCCESSFULLY,
-                           allowed_taxa_list=current_allowed_taxa(),
                            data_dates=load_data_dates())
 
 @app.route('/manual')
@@ -2406,94 +2381,25 @@ def shared_data_file(name):
         return ('Not found', 404)
     return send_file(path, as_attachment=True, download_name=name)
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-        user = User.query.filter_by(username=username).first()
-        if user is None:
-            flash('Credenciais inválidas.', 'danger')
-        elif user.must_set_password or not user.password_hash:
-            # First-time login: send to password setup
-            session['pending_user_id'] = user.id
-            return redirect(url_for('set_password'))
-        elif user.check_password(password):
-            session['user_id'] = user.id
-            flash('Login realizado com sucesso!', 'success')
-            return redirect(url_for('index'))
-        else:
-            flash('Credenciais inválidas.', 'danger')
-    return render_template(tmpl('login'), data_dates=load_data_dates())
-
-@app.route('/set_password', methods=['GET', 'POST'])
-def set_password():
-    if 'pending_user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['pending_user_id'])
-    if not user:
-        session.pop('pending_user_id', None)
-        return redirect(url_for('login'))
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
     if request.method == 'POST':
         password = request.form.get('password', '')
-        confirm  = request.form.get('confirm', '')
-        if len(password) < 6:
-            flash('A senha deve ter pelo menos 6 caracteres.', 'danger')
-        elif password != confirm:
-            flash('As senhas não coincidem.', 'danger')
-        else:
-            user.set_password(password)
-            db.session.commit()
-            session.pop('pending_user_id', None)
-            session['user_id'] = user.id
-            flash('Senha definida com sucesso! Bem-vindo(a).', 'success')
-            return redirect(url_for('index'))
-    return render_template(tmpl('set_password'), username=user.username)
+        if password == ADMIN_PASSWORD:
+            session['is_admin'] = True
+            flash('Acesso de administrador concedido.', 'success')
+            return redirect(request.form.get('next') or url_for('admin_dashboard'))
+        flash('Senha de administrador incorreta.', 'danger')
+    return render_template(tmpl('admin_login'), next=request.args.get('next', ''))
 
 @app.route('/logout')
 def logout():
-    session.clear()
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('login'))
-
-@app.route('/change_password', methods=['GET', 'POST'])
-def change_password():
-    """Self-service: a logged-in user changes their own password."""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
-    if request.method == 'POST':
-        current  = request.form.get('current', '')
-        password = request.form.get('password', '')
-        confirm  = request.form.get('confirm', '')
-        if not user.check_password(current):
-            flash('Senha atual incorreta.', 'danger')
-        elif len(password) < 6:
-            flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
-        elif password != confirm:
-            flash('As senhas não coincidem.', 'danger')
-        else:
-            user.set_password(password)
-            db.session.commit()
-            flash('Senha alterada com sucesso.', 'success')
-            return redirect(url_for('index'))
-    return render_template(tmpl('change_password'),
-                           username=user.username, is_admin=user.is_admin)
-
-def is_taxon_authorized(requested_taxon, user_allowed_taxa):
-    if not user_allowed_taxa: return False
-    current_taxon = requested_taxon.strip().lower()
-    if current_taxon in user_allowed_taxa: return True
-    while current_taxon in TAXON_HIERARCHY:
-        parent_taxon = TAXON_HIERARCHY[current_taxon]
-        if parent_taxon in user_allowed_taxa: return True
-        if parent_taxon == current_taxon: break
-        current_taxon = parent_taxon
-    return False
+    session.pop('is_admin', None)
+    flash('Sessão de administrador encerrada.', 'info')
+    return redirect(url_for('index'))
 
 @app.route('/analyze', methods=['POST'])
 def analyze_taxon():
-    if 'user_id' not in session: return redirect(url_for('login'))
     if not DATA_LOADED_SUCCESSFULLY:
         flash("Error: Application data is not loaded. Please restart the application service.", 'danger')
         return redirect(url_for('index'))
@@ -2517,9 +2423,6 @@ def analyze_taxon():
 
 @app.route('/analysis/status/<job_id>')
 def analysis_status(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     job = ANALYSIS_JOBS.get(job_id)
     if job is None:
         flash('Análise não encontrada ou expirada.', 'danger')
@@ -2529,7 +2432,7 @@ def analysis_status(job_id):
         return redirect(url_for('analysis_result', result_id=job['result_id']))
     return render_template(tmpl('analysis_status'),
                            job=job, job_id=job_id,
-                           username=user.username, is_admin=user.is_admin)
+                           is_admin=session.get('is_admin', False))
 
 @app.route('/analysis/poll/<job_id>')
 def analysis_poll(job_id):
@@ -2540,24 +2443,18 @@ def analysis_poll(job_id):
 
 @app.route('/result/<result_id>')
 def analysis_result(result_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     entry = ANALYSIS_RESULTS.get(result_id)
     if not entry:
         flash('Resultado não encontrado ou expirado.', 'danger')
         return redirect(url_for('index'))
-    user = User.query.get(session['user_id'])
     return render_template(tmpl('analysis_result'),
                            summary=entry['summary'],
                            result_id=result_id,
-                           username=user.username,
-                           is_admin=user.is_admin,
+                           is_admin=session.get('is_admin', False),
                            data_dates=load_data_dates())
 
 @app.route('/result/<result_id>/download')
 def analysis_download(result_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     entry = ANALYSIS_RESULTS.get(result_id)
     if not entry or not os.path.exists(entry['zip_path']):
         flash('Arquivo não disponível.', 'danger')
@@ -2566,12 +2463,10 @@ def analysis_download(result_id):
 
 @app.route('/admin')
 def admin_dashboard():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Access denied: Administrators only.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     users = User.query.all()
     return render_template(tmpl('admin'), users=users,
-                           username=User.query.get(session['user_id']).username,
                            is_admin=True, using_postgres=_USING_POSTGRES,
                            db_persistent=_DB_PERSISTENT,
                            data_dates=load_data_dates())
@@ -2579,9 +2474,8 @@ def admin_dashboard():
 @app.route('/admin/upload_data', methods=['POST'])
 def upload_data():
     """Admin: upload pesquisadores.xlsx and/or planilha_extendida.xlsx directly."""
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
 
     os.makedirs(os.path.join(app.root_path, 'data'), exist_ok=True)
     uploaded = []
@@ -2612,9 +2506,8 @@ def upload_data():
 @app.route('/admin/reload_data', methods=['POST'])
 def reload_data():
     """Admin: retry loading data from Google Drive."""
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     load_data_on_startup()
     if DATA_LOADED_SUCCESSFULLY:
         flash('Dados recarregados com sucesso.', 'success')
@@ -2626,9 +2519,8 @@ def reload_data():
 @app.route('/admin/export_users')
 def export_users():
     """Download a CSV of all users so admins can restore after a SQLite wipe."""
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     import csv, io
     users = User.query.all()
     out = io.StringIO()
@@ -2644,9 +2536,8 @@ def export_users():
 
 @app.route('/admin/add_user', methods=['GET', 'POST'])
 def add_user():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Access denied: Administrators only.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
@@ -2669,15 +2560,13 @@ def add_user():
                 flash(f"Error creating user: {e}", 'danger')
                 print(f"Error creating user: {e}")
     
-    current_user = User.query.get(session['user_id'])
-    return render_template(tmpl('add_user'), username=current_user.username, is_admin=current_user.is_admin)
+    return render_template(tmpl('add_user'), is_admin=True)
 
 @app.route('/admin/import_users_csv', methods=['GET', 'POST'])
 def import_users_csv():
     """Restore users from a CSV previously exported by /admin/export_users."""
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     if request.method == 'POST':
         import csv, io
         file = request.files.get('csv_file')
@@ -2710,19 +2599,14 @@ def import_users_csv():
                 print(f"CSV import error for {username}: {e}")
         flash(f'Importação CSV: {created} criados, {skipped} já existiam, {errors} erros.', 'info')
         return redirect(url_for('admin_dashboard'))
-    current_user = User.query.get(session['user_id'])
-    return render_template(tmpl('import_users_csv'), username=current_user.username, is_admin=True)
+    return render_template(tmpl('import_users_csv'), is_admin=True)
 
 @app.route('/admin/reset_password/<int:user_id>', methods=['POST'])
 def reset_password(user_id):
     """Admin action: clear a user's password so they must set a new one on next login."""
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     target = User.query.get_or_404(user_id)
-    if target.username == 'admin' and target.id == session['user_id']:
-        flash('Você não pode redefinir sua própria senha por aqui.', 'danger')
-        return redirect(url_for('admin_dashboard'))
     target.password_hash = None
     target.must_set_password = True
     db.session.commit()
@@ -2732,9 +2616,8 @@ def reset_password(user_id):
 @app.route('/admin/set_user_password/<int:user_id>', methods=['POST'])
 def admin_set_user_password(user_id):
     """Admin action: set a specific new password for a user directly (no first-access flow)."""
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     target = User.query.get_or_404(user_id)
     new_password = request.form.get('new_password', '')
     if len(new_password) < 6:
@@ -2747,9 +2630,8 @@ def admin_set_user_password(user_id):
 
 @app.route('/admin/bulk_add_users', methods=['GET', 'POST'])
 def bulk_add_users():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado: somente administradores.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
 
     results = []
     if request.method == 'POST':
@@ -2789,26 +2671,16 @@ def bulk_add_users():
 
         flash(f'Concluído: {created} criados, {skipped} já existiam, {not_found} não encontrados, {errors} erros.', 'info')
 
-    current_user = User.query.get(session['user_id'])
     return render_template(tmpl('bulk_add_users'),
                            results=results,
-                           username=current_user.username,
                            is_admin=True)
 
 @app.route('/gbif_gap', methods=['GET', 'POST'])
 def gbif_gap():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     if request.method == 'POST':
         taxon_name = request.form.get('taxon', '').strip()
         if not taxon_name:
             flash('Informe um táxon.', 'danger')
-            return redirect(url_for('gbif_gap'))
-        # Authorization: same rule as the main analysis
-        allowed = current_allowed_taxa()
-        if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
-            flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
             return redirect(url_for('gbif_gap'))
         if PLANILHA_DF is None:
             flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
@@ -2820,27 +2692,21 @@ def gbif_gap():
         t.start()
         return redirect(url_for('gbif_gap_status', job_id=job_id))
     return render_template(tmpl('gbif_gap'),
-                           username=user.username, is_admin=user.is_admin,
-                           allowed_taxa=current_allowed_taxa(),
+                           is_admin=session.get('is_admin', False),
                            data_loaded=DATA_LOADED_SUCCESSFULLY)
 
 @app.route('/gbif_gap/status/<job_id>')
 def gbif_gap_status(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     job = GBIF_JOBS.get(job_id)
     if job is None:
         flash('Job não encontrado.', 'danger')
         return redirect(url_for('gbif_gap'))
     return render_template(tmpl('gbif_gap_status'),
                            job=job, job_id=job_id,
-                           username=user.username, is_admin=user.is_admin)
+                           is_admin=session.get('is_admin', False))
 
 @app.route('/gbif_gap/download/<job_id>')
 def gbif_gap_download(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     job = GBIF_JOBS.get(job_id)
     if not job or job['status'] != 'done' or not job.get('result_path'):
         flash('Resultado não disponível.', 'danger')
@@ -2858,18 +2724,10 @@ def gbif_gap_poll(job_id):
 
 @app.route('/invasive_gap', methods=['GET', 'POST'])
 def invasive_gap():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     if request.method == 'POST':
         taxon_name = request.form.get('taxon', '').strip()
         if not taxon_name:
             flash('Informe um táxon.', 'danger')
-            return redirect(url_for('invasive_gap'))
-        # Authorization: same rule as the main analysis
-        allowed = current_allowed_taxa()
-        if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
-            flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
             return redirect(url_for('invasive_gap'))
         if PLANILHA_DF is None:
             flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
@@ -2882,26 +2740,21 @@ def invasive_gap():
         return redirect(url_for('invasive_gap_status', job_id=job_id))
     # Reuse gbif_gap template or create a new one
     return render_template(tmpl('invasive_gap'),
-                           username=user.username, is_admin=user.is_admin,
+                           is_admin=session.get('is_admin', False),
                            data_loaded=DATA_LOADED_SUCCESSFULLY)
 
 @app.route('/invasive_gap/status/<job_id>')
 def invasive_gap_status(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     job = INVASIVE_JOBS.get(job_id)
     if job is None:
         flash('Job não encontrado.', 'danger')
         return redirect(url_for('invasive_gap'))
     return render_template(tmpl('invasive_gap_status'),
                            job=job, job_id=job_id,
-                           username=user.username, is_admin=user.is_admin)
+                           is_admin=session.get('is_admin', False))
 
 @app.route('/invasive_gap/download/<job_id>')
 def invasive_gap_download(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     job = INVASIVE_JOBS.get(job_id)
     if not job or job['status'] != 'done' or not job.get('result_path'):
         flash('Resultado não disponível.', 'danger')
@@ -2917,18 +2770,11 @@ def invasive_gap_poll(job_id):
 
 @app.route('/anomalies', methods=['GET', 'POST'])
 def anomalies_check():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     if request.method == 'POST':
         taxon_name = request.form.get('taxon', '').strip()
         category = request.form.get('category', '').strip()
         if not taxon_name:
             flash('Informe um táxon.', 'danger')
-            return redirect(url_for('index'))
-        allowed = current_allowed_taxa()
-        if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
-            flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
             return redirect(url_for('index'))
         if PLANILHA_DF is None:
             flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
@@ -2945,21 +2791,16 @@ def anomalies_check():
 
 @app.route('/anomalies/status/<job_id>')
 def anomalies_status(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     job = ANOMALIES_JOBS.get(job_id)
     if job is None:
         flash('Job não encontrado.', 'danger')
         return redirect(url_for('index'))
     return render_template(tmpl('anomalies_status'),
                            job=job, job_id=job_id,
-                           username=user.username, is_admin=user.is_admin)
+                           is_admin=session.get('is_admin', False))
 
 @app.route('/anomalies/download/<job_id>')
 def anomalies_download(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     job = ANOMALIES_JOBS.get(job_id)
     if not job or job['status'] != 'done' or not job.get('result_path'):
         flash('Resultado não disponível.', 'danger')
@@ -2976,19 +2817,12 @@ def anomalies_poll(job_id):
 
 @app.route('/authors', methods=['GET', 'POST'])
 def authors_analysis():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     if request.method != 'POST':
         return redirect(url_for('index'))
-    user = User.query.get(session['user_id'])
     taxon_name = request.form.get('taxon', '').strip()
     category = request.form.get('category', '').strip()
     if not taxon_name:
         flash('Informe um táxon.', 'danger')
-        return redirect(url_for('index'))
-    allowed = current_allowed_taxa()
-    if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
-        flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
         return redirect(url_for('index'))
     if PLANILHA_DF is None:
         flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
@@ -3004,21 +2838,16 @@ def authors_analysis():
 
 @app.route('/authors/status/<job_id>')
 def authors_status(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     job = AUTHORS_JOBS.get(job_id)
     if job is None:
         flash('Job não encontrado.', 'danger')
         return redirect(url_for('index'))
     return render_template(tmpl('authors_status'),
                            job=job, job_id=job_id,
-                           username=user.username, is_admin=user.is_admin)
+                           is_admin=session.get('is_admin', False))
 
 @app.route('/authors/download/<job_id>')
 def authors_download(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     job = AUTHORS_JOBS.get(job_id)
     if not job or job['status'] != 'done' or not job.get('result_path'):
         flash('Resultado não disponível.', 'danger')
@@ -3035,19 +2864,12 @@ def authors_poll(job_id):
 
 @app.route('/contrib', methods=['GET', 'POST'])
 def contrib_analysis():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     if request.method != 'POST':
         return redirect(url_for('index'))
-    user = User.query.get(session['user_id'])
     taxon_name = request.form.get('taxon', '').strip()
     category = request.form.get('category', '').strip()
     if not taxon_name:
         flash('Informe um táxon.', 'danger')
-        return redirect(url_for('index'))
-    allowed = current_allowed_taxa()
-    if not user.is_admin and not is_taxon_authorized(taxon_name, allowed):
-        flash(f'Táxon "{taxon_name}" não está autorizado para este usuário.', 'danger')
         return redirect(url_for('index'))
     if PLANILHA_DF is None:
         flash('Dados CTFB não carregados — tente novamente mais tarde.', 'danger')
@@ -3063,21 +2885,16 @@ def contrib_analysis():
 
 @app.route('/contrib/status/<job_id>')
 def contrib_status(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    user = User.query.get(session['user_id'])
     job = CONTRIB_JOBS.get(job_id)
     if job is None:
         flash('Job não encontrado.', 'danger')
         return redirect(url_for('index'))
     return render_template(tmpl('contrib_status'),
                            job=job, job_id=job_id,
-                           username=user.username, is_admin=user.is_admin)
+                           is_admin=session.get('is_admin', False))
 
 @app.route('/contrib/download/<job_id>')
 def contrib_download(job_id):
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
     job = CONTRIB_JOBS.get(job_id)
     if not job or job['status'] != 'done' or not job.get('result_path'):
         flash('Resultado não disponível.', 'danger')
@@ -3094,7 +2911,7 @@ def contrib_poll(job_id):
 
 @app.route('/admin/update_ipt', methods=['POST'])
 def admin_update_ipt():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+    if not session.get('is_admin'):
         return {"status": "error", "message": "Acesso negado"}, 403
     
     if IPT_UPDATE_JOB['status'] == 'running':
@@ -3108,16 +2925,15 @@ def admin_update_ipt():
 
 @app.route('/admin/ipt_status')
 def admin_ipt_status():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
+    if not session.get('is_admin'):
         return {"status": "error", "message": "Acesso negado"}, 403
     from flask import jsonify
     return jsonify(IPT_UPDATE_JOB)
 
 @app.route('/admin/download_ipt_combined')
 def download_ipt_combined():
-    if 'user_id' not in session or not User.query.get(session['user_id']).is_admin:
-        flash('Acesso negado.', 'danger')
-        return redirect(url_for('index'))
+    if not session.get('is_admin'):
+        return redirect(url_for('admin_login', next=request.path))
     if not os.path.exists(LOCAL_IPT_COMBINED):
         flash('Arquivo IPT combinado ainda não gerado.', 'warning')
         return redirect(url_for('admin_dashboard'))

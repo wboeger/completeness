@@ -82,7 +82,6 @@
     <div class="header">
         <div>
             <h1>Porcentômetro</h1>
-            <h2>Bem-vindo(a), {{ username }}</h2>
         </div>
         <div class="status-indicator">
             <span>Dados:</span>
@@ -195,30 +194,15 @@
         <input type="text" id="taxon" name="taxon"
                placeholder="ex: Nematomorpha, Coleoptera, Araneae…" required autofocus>
 
-        {% if allowed_taxa_list %}
-        <div class="taxa-section">
-            <h4>Seus táxons autorizados — clique para preencher:</h4>
-            <div class="chips">
-                {% for taxon in allowed_taxa_list %}
-                <span class="chip"
-                      onclick="document.getElementById('taxon').value='{{ taxon|title }}'">
-                    {{ taxon|title }}
-                </span>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
         <button type="submit" id="submitBtn">Analisar</button>
     </form>
 
     <div class="footer-links">
         {% if is_admin %}
             <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Sair do admin</a>
         {% endif %}
         <a href="{{ url_for('manual') }}" target="_blank" rel="noopener">Manual</a>
-        <a href="{{ url_for('change_password') }}">Alterar senha</a>
-        <a href="{{ url_for('logout') }}">Sair</a>
     </div>
     {% if data_dates.planilha_extendida or data_dates.pesquisadores %}
     <p class="db-dates">

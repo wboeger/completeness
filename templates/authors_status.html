@@ -39,7 +39,10 @@
     <div class="nav">
         <a href="{{ url_for('index') }}">← Nova análise</a>
         <a href="{{ url_for('index') }}">Porcentômetro</a>
-        <a href="{{ url_for('logout') }}">Sair</a>
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Sair do admin</a>
+        {% endif %}
     </div>
 
     <h1>Autores de taxa</h1>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — Porcentômetro</title>
+    <title>Acesso do Administrador — Porcentômetro</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
         body { display: flex; justify-content: center; align-items: center;
@@ -14,7 +14,7 @@
         .app-name { color: #7f8c8d; font-size: .9rem; margin-bottom: 1.5rem; }
         label { display: block; font-weight: 600; margin-bottom: .3rem;
                 color: #34495e; font-size: .95rem; }
-        input[type=text], input[type=password] {
+        input[type=password] {
             width: 100%; padding: .6rem .8rem; border: 1px solid #ccc;
             border-radius: 5px; font-size: 1rem; box-sizing: border-box; margin-bottom: 1rem; }
         input:focus { outline: none; border-color: #3498db;
@@ -28,11 +28,9 @@
                       border-radius: 5px; font-size: .9rem; }
         .flashes .danger  { background: #f8d7da; color: #721c24; }
         .flashes .success { background: #d4edda; color: #155724; }
-        .forgot { margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid #eee;
-                  font-size: .83rem; color: #7f8c8d; text-align: center; line-height: 1.5; }
-        .forgot a { color: #2980b9; text-decoration: none; }
-        .forgot a:hover { text-decoration: underline; }
-        .db-dates { font-size: .78rem; color: #95a5a6; margin: -.8rem 0 1rem; }
+        .back { display: block; margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid #eee;
+                font-size: .85rem; color: #2980b9; text-align: center; text-decoration: none; }
+        .back:hover { text-decoration: underline; }
         .lang-bar { display: flex; gap: .5rem; margin-bottom: 1.4rem; }
         .lang-btn { flex: 1; padding: .5rem; border: 2px solid #dce1e7; border-radius: 6px;
                     background: white; font-size: .9rem; font-weight: 600; cursor: pointer;
@@ -44,23 +42,12 @@
 </head>
 <body>
 <div class="card">
-    <h2>Porcentômetro</h2>
-    <p class="app-name">Taxonomic Catalogue of Brazilian Fauna</p>
-    {% if data_dates.planilha_extendida or data_dates.pesquisadores %}
-    <p class="db-dates">
-        {% if data_dates.planilha_extendida %}
-        Catalogue updated on <strong>{{ data_dates.planilha_extendida }}</strong>
-        {% endif %}
-        {% if data_dates.planilha_extendida and data_dates.pesquisadores %} &nbsp;·&nbsp; {% endif %}
-        {% if data_dates.pesquisadores %}
-        Researchers updated on <strong>{{ data_dates.pesquisadores }}</strong>
-        {% endif %}
-    </p>
-    {% endif %}
+    <h2>Acesso do Administrador</h2>
+    <p class="app-name">Porcentômetro — Catálogo Taxonômico da Fauna do Brasil</p>
 
     <div class="lang-bar">
-        <a class="lang-btn" href="{{ url_for('set_lang', code='pt') }}">🇧🇷 Português</a>
-        <a class="lang-btn active" href="{{ url_for('set_lang', code='en') }}">🇺🇸 English</a>
+        <a class="lang-btn active" href="{{ url_for('set_lang', code='pt') }}">🇧🇷 Português</a>
+        <a class="lang-btn" href="{{ url_for('set_lang', code='en') }}">🇺🇸 English</a>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -73,24 +60,14 @@
         {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('login') }}">
-        <label for="username">Username (login)</label>
-        <input type="text" id="username" name="username" required autofocus>
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required>
-        <button type="submit">Log in</button>
+    <form method="POST" action="{{ url_for('admin_login') }}">
+        <input type="hidden" name="next" value="{{ next }}">
+        <label for="password">Senha de administrador</label>
+        <input type="password" id="password" name="password" required autofocus>
+        <button type="submit">Entrar</button>
     </form>
 
-    <div class="forgot">
-        <strong>Forgot your password?</strong><br>
-        Ask the system administrator to reset your access,<br>
-        or write to
-        <a href="mailto:faunadobrasilctfb@gmail.com">faunadobrasilctfb@gmail.com</a>
-    </div>
-
-    <div class="forgot">
-        <a href="{{ url_for('manual') }}" target="_blank" rel="noopener">📖 User manual</a>
-    </div>
+    <a class="back" href="{{ url_for('index') }}">← Voltar à página principal</a>
 </div>
 </body>
 </html>

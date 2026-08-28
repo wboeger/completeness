@@ -32,7 +32,10 @@
 <div class="container">
     <div class="nav">
         <a href="{{ url_for('index') }}">← New analysis</a>
-        <a href="{{ url_for('logout') }}">Log out</a>
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Admin logout</a>
+        {% endif %}
     </div>
 
     <h1>Data Completeness — {{ job.taxon_name }}</h1>

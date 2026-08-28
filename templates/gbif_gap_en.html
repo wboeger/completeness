@@ -37,8 +37,10 @@
 <div class="container">
     <div class="nav">
         <a href="{{ url_for('index') }}">← Porcentômetro</a>
-        {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin</a>{% endif %}
-        <a href="{{ url_for('logout') }}">Logout</a>
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Admin logout</a>
+        {% endif %}
     </div>
 
     <h1>Species Checklist Completeness</h1>
@@ -67,16 +69,6 @@
                    placeholder="e.g.: Nematomorpha, Coleoptera, Araneae…"
                    required autofocus>
             <p class="hint">Enter the exact taxon name (phylum, class, order, family…).</p>
-
-            {% if allowed_taxa %}
-            <p style="font-size:.88rem; font-weight:600; color:#34495e; margin-bottom:.4rem;">Your authorised taxa:</p>
-            <div class="taxa-chips">
-                {% for t in allowed_taxa %}
-                <span class="chip" onclick="document.getElementById('taxon').value='{{ t|title }}'">{{ t|title }}</span>
-                {% endfor %}
-            </div>
-            <div style="height:.8rem"></div>
-            {% endif %}
 
             <button type="submit">Start GBIF analysis</button>
         </form>

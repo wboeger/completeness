@@ -37,8 +37,10 @@
 <div class="container">
     <div class="nav">
         <a href="{{ url_for('index') }}">← Porcentômetro</a>
-        {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin</a>{% endif %}
-        <a href="{{ url_for('logout') }}">Sair</a>
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Sair do admin</a>
+        {% endif %}
     </div>
 
     <h1>Completude da Lista de Espécies</h1>
@@ -66,16 +68,6 @@
             <input type="text" id="taxon" name="taxon" placeholder="ex: Nematomorpha, Coleoptera, Araneae…"
                    required autofocus>
             <p class="hint">Digite o nome exato do táxon (filo, classe, ordem, família…).</p>
-
-            {% if allowed_taxa %}
-            <p style="font-size:.88rem; font-weight:600; color:#34495e; margin-bottom:.4rem;">Seus táxons autorizados:</p>
-            <div class="taxa-chips">
-                {% for t in allowed_taxa %}
-                <span class="chip" onclick="document.getElementById('taxon').value='{{ t|title }}'">{{ t|title }}</span>
-                {% endfor %}
-            </div>
-            <div style="height:.8rem"></div>
-            {% endif %}
 
             <button type="submit">Iniciar análise GBIF</button>
         </form>

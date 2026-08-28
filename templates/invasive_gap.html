@@ -27,8 +27,10 @@
 <div class="container">
     <div class="nav">
         <a href="{{ url_for('index') }}">← Porcentômetro</a>
-        {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin</a>{% endif %}
-        <a href="{{ url_for('logout') }}">Sair</a>
+        {% if is_admin %}
+            <a href="{{ url_for('admin_dashboard') }}">Admin</a>
+            <a href="{{ url_for('logout') }}">Sair do admin</a>
+        {% endif %}
     </div>
 
     <h1>Análise de Espécies Invasoras</h1>
@@ -60,11 +62,7 @@
                 <p style="font-size: .8rem; color: #7f8c8d; margin-top: .4rem;">
                     Apenas espécies invasoras pertencentes a este táxon serão analisadas.
                 </p>
-                {% if allowed_taxa %}
-                <div style="margin-top: .8rem; font-size: .82rem; color: #2c3e50;">
-                    <strong>Seus táxons autorizados:</strong> {{ allowed_taxa|join(', ') }}
-                </div>
-                {% endif %}
+
             </div>
             <button type="submit">Iniciar Comparação</button>
         </form>
