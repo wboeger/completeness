@@ -35,8 +35,13 @@ app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-me')
 _DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'users.db')
 os.makedirs(os.path.dirname(_DEFAULT_DB_PATH), exist_ok=True)
 DATABASE_URL = os.environ.get('DATABASE_URL', f'sqlite:///{_DEFAULT_DB_PATH}')
+# Normalize to the psycopg2 driver explicitly. SQLAlchemy 2.1+ defaults a bare
+# "postgresql://" URL to psycopg v3, which is not installed (only psycopg2-binary
+# ships in requirements), so pin the dialect to avoid a boot-time ImportError.
 if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+elif DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Allow session cookies to be sent inside cross-origin iframes (e.g. Google Sites).
